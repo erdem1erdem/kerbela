@@ -13,6 +13,7 @@ type Body = {
   mode?: ModeId;
   exclude?: string[];
   cards?: CategoryCardSpec[];
+  players?: string[];
 };
 
 export async function POST(req: NextRequest) {
@@ -36,7 +37,12 @@ export async function POST(req: NextRequest) {
   try {
     const questions =
       Array.isArray(body.cards) && body.cards.length > 0
-        ? await generateCategoryQuestions(body.cards, mode, exclude)
+        ? await generateCategoryQuestions(
+            body.cards,
+            mode,
+            exclude,
+            body.players ?? [],
+          )
         : await generateTruthQuestions(
             getIntensity(body.intensity ?? "hafif"),
             mode,

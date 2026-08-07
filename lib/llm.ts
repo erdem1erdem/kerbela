@@ -47,6 +47,7 @@ export async function generateCategoryQuestions(
   cards: CategoryCardSpec[],
   mode: ModeId,
   exclude: string[],
+  players: string[] = [],
 ): Promise<TruthQuestion[]> {
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) {
@@ -69,6 +70,13 @@ export async function generateCategoryQuestions(
     )
     .join("\n");
 
+  const playerBlock =
+    players.length > 1
+      ? `\nOyun bu grup oyuncularla oynanıyor: ${players
+          .map((p) => `"${p}"`)
+          .join(", ")}.\nSorularda oyuncu adını doğrudan YAZMA; onun yerine "@oyuncu" yaz (oyun otomatik olarak oyuncu adını koyar).`
+      : "";
+
   const prompt = `Oyun: "Sınır Kartları" — bir doğruluk (truth) partisi oyunu.
 Görev: Yalnızca DOĞRULUK (truth) soruları üret. Soru olmayan hiçbir görev, eylem veya meydan okuma içeriği üretme.
 
@@ -76,11 +84,15 @@ ${buildModeBlock(mode)}
 
 Aşağıda 5 kart ve her kartın gizli kategorisi var. HER KART İÇİN TAM OLARAK 1 soru üret, sıraya birebir uy:
 ${cardBlock}
+${playerBlock}
 
 Kurallar:
 - ${cards.length} adet soru üret; sıra asla bozulmasın.
 - Her soru TEK cümle, "sen" hitabı, en fazla ~18 kelime, soru işaretiyle bitsin.
-- Sorular birbirinden ve klişelerden farklı olsun.
+- Sorular BİRBİRİNE BENZEMESİN: her soru farklı bir konu, farklı bir durum ve farklı bir tonda olsun; aynı temayı veya benzer senaryoyu iki kez kullanma.
+- Klişe sorulardan kaçın: "En büyük pişmanlığın ne?" gibi her doğruluk oyununda sorulan cümleleri üretme.
+- Soruların yaklaşık yarısı EĞLENCELİ, komik ve yaratıcı olsun; hepsi ciddi veya duygusal olmasın. Komik senaryolar, absürt durumlar, "olsaydı ne yapardın" soruları serbest.
+- En az 2 soruda diğer oyuncuyu konu al: "Sence @oyuncu ... olsa ne yapardı?", "@oyuncu ... olsa hangisi olurdu?" veya "@oyuncu hakkında sence en çok ... ?" gibi. "@oyuncu" metnini AYNEN koru, başka isim kullanma.
 - Kartın kategorisine uygun olsun (ör: "Gizli" → sırlar, "Aşk" → kalp işleri, "Geçmiş" → anılar/pişmanlıklar).
 - SERT işaretli kartın sorusu gerçekten zor, kışkırtıcı ve kişisel olsun; diğerleri daha rahat.
 ${buildExcludeBlock(exclude)}

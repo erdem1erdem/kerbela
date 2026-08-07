@@ -760,6 +760,114 @@ export const QUESTIONS: TruthQuestion[] = [
     mode: "ekstrem",
     text: "Aynı anda birden fazla kişiyle ilgili deneyimin ya da hayalin var mı?",
   },
+  {
+    id: "e1",
+    intensity: "hafif",
+    tag: "Hayal",
+    text: "Bir hafta boyunca hiç konuşma yasağın olsa, ilk gün en çok ne anlatmak isterdin?",
+  },
+  {
+    id: "e2",
+    intensity: "hafif",
+    tag: "Zevk",
+    text: "Tüm hayatın boyunca tek bir yemek yemek zorunda kalsan hangisini seçerdin?",
+  },
+  {
+    id: "e3",
+    intensity: "hafif",
+    tag: "Dijital",
+    text: "Telefonun şarjı bitse ve 10 saat beklemen gerekse ilk yapacağın üç şey nedir?",
+  },
+  {
+    id: "e4",
+    intensity: "hafif",
+    tag: "Hayal",
+    text: "Bir günlüğüne süper hız kazansan en çok ne yapardın?",
+  },
+  {
+    id: "e5",
+    intensity: "hafif",
+    tag: "Anı",
+    text: "Çocukken en takıntılı olduğun şey neydi?",
+  },
+  {
+    id: "e6",
+    intensity: "hafif",
+    tag: "Hayat",
+    text: "Bir meyve olsan hangisi olurdun, neden?",
+  },
+  {
+    id: "e7",
+    intensity: "orta",
+    tag: "Hayal",
+    text: "Zamanı bir saatliğine durdurabilsen ilk yapacağın şey ne olurdu?",
+  },
+  {
+    id: "e8",
+    intensity: "orta",
+    tag: "İnsanlar",
+    text: "Bu gruptan biriyle bir günlüğüne yer değiştirme şansın olsa kimi seçerdin, neden?",
+  },
+  {
+    id: "e9",
+    intensity: "orta",
+    tag: "İnsanlar",
+    text: "Sence @oyuncu bir milyon dolar kazansa ilk iş olarak ne yapardı?",
+  },
+  {
+    id: "e10",
+    intensity: "hafif",
+    tag: "Hayal",
+    text: "@oyuncu bir yıl boyunca tatlı yiyemese sence kaç güne dayanırdı?",
+  },
+  {
+    id: "e11",
+    intensity: "hafif",
+    tag: "Hayal",
+    text: "@oyuncu bir hayvan olsaydı sence hangisi olurdu, neden?",
+  },
+  {
+    id: "e12",
+    intensity: "orta",
+    tag: "İnsanlar",
+    text: "@oyuncu bütün sosyal medyayı bıraksa sence en çok neyi özlerdi?",
+  },
+  {
+    id: "e13",
+    intensity: "hafif",
+    tag: "Zevk",
+    text: "Sence @oyuncu en çok hangi yemeği yemeyi reddederdi?",
+  },
+  {
+    id: "e14",
+    intensity: "orta",
+    tag: "Gizli",
+    text: "@oyuncu'nun kimseye söylemediğini düşündüğün bir şey nedir?",
+  },
+  {
+    id: "e15",
+    intensity: "orta",
+    tag: "Hayat",
+    text: "@oyuncu bir gece yarısı ormanda mahsur kalsa sence ilk ne yapardı?",
+  },
+  {
+    id: "e16",
+    intensity: "atesli",
+    tag: "Kalp",
+    text: "Bu grupta @oyuncu'ya gizlice hoşlanan biri olduğunu düşünüyor musun, neden?",
+  },
+  {
+    id: "e17",
+    intensity: "sinir-otesi",
+    tag: "Sınır",
+    text: "@oyuncu'nun asla göze alamayacağını düşündüğün bir şey nedir?",
+  },
+  {
+    id: "e18",
+    intensity: "hafif",
+    tag: "Korku",
+    text: "En saçma korkun ne, ne zaman başladı?",
+  },
 ];
 
 export function getQuestionsByIntensity(
@@ -812,4 +920,17 @@ export function normalizeText(text: string): string {
     .replace(/[.,!?;:«»""''()\-–—…]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export const PLAYER_PLACEHOLDER = "@oyuncu";
+
+export function fillPlayerPlaceholder(
+  text: string,
+  currentPlayer: string,
+  otherPlayers: string[],
+): string {
+  if (!text.includes(PLAYER_PLACEHOLDER)) return text;
+  const pool = otherPlayers.length > 0 ? otherPlayers : [currentPlayer];
+  const name = pool[Math.floor(Math.random() * pool.length)];
+  return text.split(PLAYER_PLACEHOLDER).join(name);
 }

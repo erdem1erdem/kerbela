@@ -9,6 +9,7 @@ import { CardFlip, type RoundCard } from "@/components/oyun/CardFlip";
 import {
   CATEGORIES,
   MODES,
+  fillPlayerPlaceholder,
   getLocalQuestionForCategory,
   normalizeText,
   type Category,
@@ -60,6 +61,7 @@ export default function OyunPage() {
   const [error, setError] = useState<string | null>(null);
 
   const askedRef = useRef<string[]>([]);
+  const dealtRef = useRef<string[]>([]);
 
   const pickedCard = roundCards.find((c) => c.revealed && c.question) ?? null;
 
@@ -91,14 +93,15 @@ export default function OyunPage() {
     const cleanNames = names.map((n, i) => n.trim() || `Oyuncu ${i + 1}`);
     setPlayers(cleanNames);
     askedRef.current = [];
+    dealtRef.current = [];
     setQuestionCount(0);
     setCurrent(0);
     setError(null);
     setPhase("play");
-    void dealRound();
+    void dealRound(cleanNames[0], cleanNames);
   }
 
-  async function dealRound() {
+  async function dealRound(currentPlayerName: string, playerList: string[]) {
     setLoadingRound(true);
     setError(null);
     const roundId = nextRoundId();
@@ -113,6 +116,8 @@ export default function OyunPage() {
         revealed: false,
       }));
 
+    const otherPlayers = playerList.filter((p) => p !== currentPlayerName);
+
     let aiQuestions: TruthQuestion[] = [];
     if (shouldUseAi()) {
       try {
@@ -121,13 +126,14 @@ export default function OyunPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             mode,
+            players: playerList,
             cards: cards.map((c) => ({
               id: c.category.id,
               name: c.category.name,
               emoji: c.category.emoji,
               hard: c.hard,
             })),
-            exclude: askedRef.current.slice(-25),
+            exclude: dealtRef.current.slice(-40),
           }),
         });
         const data = (await res.json()) as {
@@ -146,30 +152,61 @@ export default function OyunPage() {
       const aiQ = aiQuestions[i];
       let question: TruthQuestion | null = null;
       if (aiQ && typeof aiQ.text === "string" && aiQ.text.trim()) {
-        question = { ...aiQ, tag: card.category.name };
-      } else {
-        question = getLocalQuestionForCategory(
+        const filled: TruthQuestion = {
+          ...aiQ,
+          tag: card.category.name,
+          text: fillPlayerPlaceholder(aiQ.text, currentPlayerName, otherPlayers),
+        };
+        const norm = normalizeText(filled.text);
+        if (!usedTexts.has(norm) && !dealtRef.current.includes(norm)) {
+          question = filled;
+        }
+      }
+      if (!question) {
+        const local = getLocalQuestionForCategory(
           card.category,
           card.hard,
           mode,
           [...askedRef.current, ...usedTexts],
         );
+        if (local) {
+          question = {
+            ...local,
+            text: fillPlayerPlaceholder(
+              local.text,
+              currentPlayerName,
+              otherPlayers,
+            ),
+          };
+        }
       }
       if (question) usedTexts.add(normalizeText(question.text));
       return { ...card, question };
     });
 
+    dealtRef.current.push(
+      ...assigned
+        .filter((c) => c.question)
+        .map((c) => normalizeText(c.question!.text)),
+    );
+
     setRoundCards(assigned);
     setLoadingRound(false);
   }
 
-  async function fetchSertQuestion(category: Category): Promise<TruthQuestion | null> {
+  async function fetchSertQuestion(
+    category: Category,
+    currentPlayerName: string,
+    playerList: string[],
+  ): Promise<TruthQuestion | null> {
+    const otherPlayers = playerList.filter((p) => p !== currentPlayerName);
     try {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
+          players: playerList,
           cards: [
             {
               id: category.id,
@@ -178,7 +215,7 @@ export default function OyunPage() {
               hard: true,
             },
           ],
-          exclude: askedRef.current.slice(-25),
+          exclude: dealtRef.current.slice(-40),
         }),
       });
       const data = (await res.json()) as {
@@ -188,15 +225,31 @@ export default function OyunPage() {
       if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
       const q = data.questions?.[0];
       if (q && typeof q.text === "string" && q.text.trim()) {
-        return { ...q, tag: category.name, intensity: "sinir-otesi", mode };
+        return {
+          ...q,
+          tag: category.name,
+          intensity: "sinir-otesi",
+          mode,
+          text: fillPlayerPlaceholder(q.text, currentPlayerName, otherPlayers),
+        };
       }
     } catch {
       // yerel havuzdan sert soru ile devam
     }
-    return getLocalQuestionForCategory(category, true, mode, askedRef.current);
+    const local = getLocalQuestionForCategory(category, true, mode, askedRef.current);
+    if (!local) return null;
+    return {
+      ...local,
+      text: fillPlayerPlaceholder(local.text, currentPlayerName, otherPlayers),
+    };
   }
 
-  async function switchToCard(index: number, target: RoundCard) {
+  async function switchToCard(
+    index: number,
+    target: RoundCard,
+    currentPlayerName: string,
+    playerList: string[],
+  ) {
     setLoadingRound(true);
     setError(null);
     setRoundCards((prev) =>
@@ -206,7 +259,11 @@ export default function OyunPage() {
           : { ...c, revealed: false },
       ),
     );
-    const sert = await fetchSertQuestion(target.category);
+    const sert = await fetchSertQuestion(
+      target.category,
+      currentPlayerName,
+      playerList,
+    );
     setRoundCards((prev) =>
       prev.map((c, i) =>
         i === index && c.revealed ? { ...c, question: sert } : c,
@@ -224,7 +281,7 @@ export default function OyunPage() {
     if (revealed && revealed.hard) return;
 
     if (revealed) {
-      void switchToCard(index, target);
+      void switchToCard(index, target, players[current], players);
     } else {
       if (!target.question) return;
       setRoundCards((prev) =>
@@ -235,23 +292,25 @@ export default function OyunPage() {
 
   function skipRound() {
     if (loadingRound) return;
-    void dealRound();
+    void dealRound(players[current], players);
   }
 
   function advanceRound(samePlayer: boolean) {
     const picked = roundCards.find((c) => c.revealed && c.question);
     if (picked?.question) {
-      askedRef.current.push(normalizeText(picked.question.text));
+      const norm = normalizeText(picked.question.text);
+      askedRef.current.push(norm);
+      dealtRef.current.push(norm);
     }
     setQuestionCount((c) => c + 1);
-    if (!samePlayer) {
-      setCurrent((c) => (c + 1) % players.length);
-    }
-    void dealRound();
+    const nextIndex = samePlayer ? current : (current + 1) % players.length;
+    setCurrent(nextIndex);
+    void dealRound(players[nextIndex], players);
   }
 
   function restart() {
     askedRef.current = [];
+    dealtRef.current = [];
     setRoundCards([]);
     setError(null);
     setQuestionCount(0);
@@ -531,7 +590,7 @@ export default function OyunPage() {
                   </p>
                   <p className="text-sm text-cola-800/70">{error}</p>
                   <button
-                    onClick={() => void dealRound()}
+                    onClick={() => void dealRound(players[current], players)}
                     className="mt-2 rounded-full bg-gradient-to-br from-cola-600 to-cola-900 px-7 py-3 text-xs font-bold tracking-widest text-cream-100 uppercase shadow-pop transition-transform hover:scale-105"
                   >
                     Tekrar dene
