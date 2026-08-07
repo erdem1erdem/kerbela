@@ -12,7 +12,7 @@ const RULES = [
   {
     icon: "⚡",
     title: "Sert Kart",
-    text: "Bir kartın rengi farklıdır. Onu seçersen sınırları zorlayan sert bir soruyla karşılaşırsın. Cesaretin varsa aç.",
+    text: "Aralarda gizli bir sert kart var; ona denk gelirsen sınırları zorlayan bir soruyla yüzleşirsin. Beğenmediğin soruyu değiştirirsen yeni soru sertleşir.",
   },
   {
     icon: "🤖",
@@ -82,14 +82,15 @@ export default function Home() {
               <div className="flex flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
                 <div>
                   <p className="font-display text-xs font-bold tracking-[0.3em] text-cola-300 uppercase">
-                    {CATEGORIES.length} gizli kategori
+                    {CATEGORIES.length} farklı kategori
                   </p>
                   <h2 className="font-display mt-2 text-2xl font-black tracking-tight text-cream-100 uppercase sm:text-3xl">
                     Hangi kartı açacaksın?
                   </h2>
                   <p className="mt-2 max-w-lg text-sm text-cream-100/70">
-                    Sert kart yalnızca en yakın arkadaş grubunla oynanmalı.
-                    Kızaran yanaklar oyunun doğal parçasıdır.
+                    Her turda {CATEGORIES.length} kategoriden 5 tanesi masaya
+                    gelir. Sert kartla ya da değişen soruyla karşılaşan
+                    cesaretini göstermek zorunda.
                   </p>
                 </div>
               </div>

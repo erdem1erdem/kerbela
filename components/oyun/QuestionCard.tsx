@@ -125,7 +125,7 @@ export function QuestionCard({
                         fill="currentColor"
                       />
                     </svg>
-                    {playerName} · bu kart konuşuyor
+                    {playerName} · Bu soruya cevap vermelisin
                   </p>
                   <p className="text-balance font-display text-2xl leading-snug font-semibold text-cream-100 sm:text-[2rem]">
                     “{question.text}”

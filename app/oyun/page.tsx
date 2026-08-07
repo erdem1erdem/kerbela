@@ -11,12 +11,36 @@ import {
   MODES,
   getLocalQuestionForCategory,
   normalizeText,
+  type Category,
   type ModeId,
   type TruthQuestion,
 } from "@/lib/questions";
 
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS = 2;
+
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+let roundSeq = 0;
+function nextRoundId(): number {
+  roundSeq += 1;
+  return roundSeq;
+}
+
+function pickHardIndex(): number {
+  return Math.floor(Math.random() * 5);
+}
+
+function shouldUseAi(): boolean {
+  return Math.random() < 0.9;
+}
 
 export default function OyunPage() {
   const [phase, setPhase] = useState<"setup" | "play">("setup");
@@ -77,18 +101,20 @@ export default function OyunPage() {
   async function dealRound() {
     setLoadingRound(true);
     setError(null);
-    const roundId = Date.now();
-    const hardIdx = Math.floor(Math.random() * CATEGORIES.length);
-    const cards: RoundCard[] = CATEGORIES.map((category, i) => ({
-      key: `${roundId}-${i}`,
-      category,
-      hard: i === hardIdx,
-      question: null,
-      revealed: false,
-    }));
+    const roundId = nextRoundId();
+    const hardIdx = pickHardIndex();
+    const cards: RoundCard[] = shuffle(CATEGORIES)
+      .slice(0, 5)
+      .map((category, i) => ({
+        key: `${roundId}-${category.id}-${i}`,
+        category,
+        hard: i === hardIdx,
+        question: null,
+        revealed: false,
+      }));
 
     let aiQuestions: TruthQuestion[] = [];
-    if (Math.random() < 0.9) {
+    if (shouldUseAi()) {
       try {
         const res = await fetch("/api/questions", {
           method: "POST",
@@ -137,11 +163,74 @@ export default function OyunPage() {
     setLoadingRound(false);
   }
 
-  function pickCard(index: number) {
-    if (loadingRound || pickedCard) return;
+  async function fetchSertQuestion(category: Category): Promise<TruthQuestion | null> {
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          cards: [
+            {
+              id: category.id,
+              name: category.name,
+              emoji: category.emoji,
+              hard: true,
+            },
+          ],
+          exclude: askedRef.current.slice(-25),
+        }),
+      });
+      const data = (await res.json()) as {
+        questions?: TruthQuestion[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
+      const q = data.questions?.[0];
+      if (q && typeof q.text === "string" && q.text.trim()) {
+        return { ...q, tag: category.name, intensity: "sinir-otesi", mode };
+      }
+    } catch {
+      // yerel havuzdan sert soru ile devam
+    }
+    return getLocalQuestionForCategory(category, true, mode, askedRef.current);
+  }
+
+  async function switchToCard(index: number, target: RoundCard) {
+    setLoadingRound(true);
+    setError(null);
     setRoundCards((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, revealed: true } : c)),
+      prev.map((c, i) =>
+        i === index
+          ? { ...c, revealed: true, hard: true, question: null }
+          : { ...c, revealed: false },
+      ),
     );
+    const sert = await fetchSertQuestion(target.category);
+    setRoundCards((prev) =>
+      prev.map((c, i) =>
+        i === index && c.revealed ? { ...c, question: sert } : c,
+      ),
+    );
+    setLoadingRound(false);
+  }
+
+  function pickCard(index: number) {
+    if (loadingRound) return;
+    const target = roundCards[index];
+    if (!target) return;
+    const revealed = roundCards.find((c) => c.revealed && c.question);
+
+    if (revealed && revealed.hard) return;
+
+    if (revealed) {
+      void switchToCard(index, target);
+    } else {
+      if (!target.question) return;
+      setRoundCards((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, revealed: true } : c)),
+      );
+    }
   }
 
   function skipRound() {
@@ -211,8 +300,9 @@ export default function OyunPage() {
                   Oyunu <span className="text-cola-500">Kur</span>
                 </motion.h1>
                 <p className="mt-3 text-sm font-medium text-cola-800/70">
-                  Masaya 5 kart, arkada 5 gizli kategori. Birinin rengi farklı —
-                  onun sorusu sert. Sıran gelince bir kart seç, kart konuşsun.
+                  Her turda 8 kategoriden rastgele 5 kart dağıtılır; aralarında
+                  gizli bir sert kart var. Soruyu beğenmezsen başka karta
+                  basabilirsin ama yeni soru sert olur.
                 </p>
               </div>
 
@@ -392,7 +482,7 @@ export default function OyunPage() {
                       ⚡
                     </span>
                     <span className="text-sm font-bold text-cola-800">
-                      1 sert kart
+                      Sert kart final
                     </span>
                   </span>
                 </div>
@@ -407,7 +497,7 @@ export default function OyunPage() {
 
               <div className="mb-10">
                 <p className="mb-4 text-center text-xs font-bold tracking-[0.3em] text-cola-500 uppercase">
-                  Kategoriler gizli · farklı renk = sert kart
+                  Sert kart gizli · soruyu beğenmezsen başka karta bas, o soru sertleşir
                 </p>
                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-4">
                   {roundCards.map((card, i) => (
@@ -416,7 +506,9 @@ export default function OyunPage() {
                         card={card}
                         index={i}
                         onPick={() => pickCard(i)}
-                        disabled={loadingRound || !!pickedCard}
+                        disabled={
+                          loadingRound || (!!pickedCard && pickedCard.hard)
+                        }
                       />
                     </div>
                   ))}

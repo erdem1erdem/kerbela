@@ -87,8 +87,9 @@ export function Hero() {
           style={{ x: titleX, y: titleY, transform: "translateZ(35px)" }}
           className="text-balance mt-6 max-w-xl text-base font-medium text-cola-800/80 sm:text-lg"
         >
-          Masada 5 kart, arkasında 5 gizli kategori. Farklı renkli kartın sorusu
-          sert. Seçtiğin kart konuşur, sen gerçeği söylersin.{" "}
+          Masada 5 kart, arkasında gizli kategoriler. Aralarında gizli bir sert
+          kart var; ona denk gelirsen soru sertleşir. Beğenmezsen başka karta
+          basabilirsin.{" "}
           <span className="font-bold text-cola-600">
             Hangi kartı açmaya cesaretin var?
           </span>

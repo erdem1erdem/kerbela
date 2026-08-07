@@ -58,13 +58,13 @@ export const CATEGORIES: Category[] = [
     id: "hayat",
     name: "Hayat",
     emoji: "🧠",
-    tags: ["Hayat", "Hayal", "Zevk", "Eşya", "Dijital"],
+    tags: ["Hayat", "Zevk", "Eşya"],
   },
   {
     id: "gizli",
     name: "Gizli",
     emoji: "🎭",
-    tags: ["Gizli", "Korku"],
+    tags: ["Gizli"],
   },
   {
     id: "gecmis",
@@ -76,13 +76,31 @@ export const CATEGORIES: Category[] = [
     id: "ask",
     name: "Aşk",
     emoji: "❤️",
-    tags: ["Kalp", "Flört", "Romantik", "İlişki"],
+    tags: ["Kalp", "Flört", "İlişki", "Romantik"],
   },
   {
-    id: "sinir",
-    name: "Sınır",
-    emoji: "🔥",
-    tags: ["Sınır", "İnsanlar", "Duygu", "Fantezi", "Arzu", "Gece", "Deneyim"],
+    id: "hayal",
+    name: "Hayal",
+    emoji: "✨",
+    tags: ["Hayal", "Dijital"],
+  },
+  {
+    id: "duygu",
+    name: "Duygu",
+    emoji: "🌊",
+    tags: ["Duygu", "Korku"],
+  },
+  {
+    id: "arkadas",
+    name: "Arkadaş",
+    emoji: "🤝",
+    tags: ["İnsanlar"],
+  },
+  {
+    id: "cesaret",
+    name: "Cesaret",
+    emoji: "⚡",
+    tags: ["Sınır", "Deneyim", "Fantezi", "Gece", "Arzu"],
   },
 ];
 
