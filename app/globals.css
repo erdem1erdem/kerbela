@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream-50: #fffdf7;
+  --color-cream-100: #fff6e8;
+  --color-cream-200: #fff0d8;
+  --color-cream-300: #fbe5c2;
+  --color-cream-400: #f4d5a5;
+
+  --color-vanilla-100: #fbeed5;
+  --color-vanilla-200: #f5e0b4;
+  --color-vanilla-300: #eecd8c;
+
+  --color-cola-300: #eda6b2;
+  --color-cola-400: #d86a7b;
+  --color-cola-500: #b83a4e;
+  --color-cola-600: #96283c;
+  --color-cola-700: #77202f;
+  --color-cola-800: #591824;
+  --color-cola-900: #3f101a;
+  --color-cola-950: #28090f;
+
+  --font-display: var(--font-unbounded);
+  --font-body: var(--font-outfit);
+
+  --shadow-cola: 0 30px 60px -15px rgb(88 24 36 / 0.45);
+  --shadow-card: 0 24px 48px -12px rgb(88 24 36 / 0.35);
+  --shadow-pop: 0 12px 24px -8px rgb(88 24 36 / 0.4);
+  --shadow-soft: 0 10px 30px -12px rgb(88 24 36 / 0.25);
+
+  --animate-float-slow: float 9s ease-in-out infinite;
+  --animate-float-med: float 6s ease-in-out infinite;
+  --animate-drift: drift 22s ease-in-out infinite;
+  --animate-breathe: breathe 5s ease-in-out infinite;
+  --animate-bubble: bubble 16s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-18px);
+    }
+  }
+
+  @keyframes drift {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    33% {
+      transform: translate(40px, -30px) scale(1.08);
+    }
+    66% {
+      transform: translate(-30px, 24px) scale(0.95);
+    }
+  }
+
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.9;
+      transform: scale(1.06);
+    }
+  }
+
+  @keyframes bubble {
+    0% {
+      transform: translateY(110vh) translateX(0) scale(0.4);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.7;
+    }
+    90% {
+      opacity: 0.5;
+    }
+    100% {
+      transform: translateY(-20vh) translateX(30px) scale(1);
+      opacity: 0;
+    }
+  }
+}
+
+:root {
+  --cream: #fff6e8;
+  --cola: #77202f;
+}
+
+* {
+  border-color: rgb(40 9 15 / 0.1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--cream);
+  color: var(--cola);
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgb(184 58 78 / 0.9);
+  color: #fff6e8;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #fff0d8;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(#d86a7b, #96283c);
+  border-radius: 999px;
+  border: 2px solid #fff0d8;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-gradient-cola {
+  background: linear-gradient(120deg, #28090f 0%, #96283c 45%, #d86a7b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-cream {
+  background: linear-gradient(120deg, #fff6e8 0%, #ffd9a0 60%, #eda6b2 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+.perspective-900 {
+  perspective: 900px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+}
+.tilt-reveal {
+  transform: translateZ(60px);
+}
+.layer-1 {
+  transform: translateZ(30px);
+}
+.layer-2 {
+  transform: translateZ(55px);
+}
+.layer-3 {
+  transform: translateZ(90px);
+}
+
+.glass-cream {
+  background: rgb(255 246 232 / 0.72);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
+.glass-cola {
+  background: rgb(40 9 15 / 0.65);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+
+.grid-floor {
+  background-image:
+    linear-gradient(rgb(119 32 47 / 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(119 32 47 / 0.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  transform: rotateX(60deg) translateZ(-120px);
+  transform-style: preserve-3d;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 45%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 45%, black 30%, transparent 75%);
+}
+
+.noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
