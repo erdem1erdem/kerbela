@@ -87,10 +87,10 @@ export function Hero() {
           style={{ x: titleX, y: titleY, transform: "translateZ(35px)" }}
           className="text-balance mt-6 max-w-xl text-base font-medium text-cola-800/80 sm:text-lg"
         >
-          Bir kart seç, soruya gerçekten cevap ver. Hafiften sınır ötesine,
-          her turda biraz daha derin.{" "}
+          Masada 5 kart, arkasında 5 gizli kategori. Farklı renkli kartın sorusu
+          sert. Seçtiğin kart konuşur, sen gerçeği söylersin.{" "}
           <span className="font-bold text-cola-600">
-            Sınırlarını zorlamaya hazır mısın?
+            Hangi kartı açmaya cesaretin var?
           </span>
         </motion.p>
 

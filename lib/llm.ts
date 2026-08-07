@@ -21,6 +21,132 @@ function extractJsonArray(text: string): unknown[] {
   }
 }
 
+function buildModeBlock(mode: ModeId): string {
+  return mode === "ekstrem"
+    ? `Bu bir +18 (yetişkin) oyun modu. Sorular yetişkinlere yönelik, cinsellik ve arzu temalı, açık ve rahatsız edici olabilen ama bir partide sesli söylenebilir tonda olsun. Kaba olmasın; rahatsız edici, nefret içeren, yasadışı veya zarar verici içerik yok.`
+    : `Bu bir standart mod. Sorular sınırları zorlasa da +18 ya da cinsel içerikli olmamalı; herkesin olduğu bir ortamda rahatça okunabilmeli.`;
+}
+
+function buildExcludeBlock(exclude: string[]): string {
+  return exclude.length
+    ? `\nÖnceden sorulmuş sorulara AYNI veya ÇOK BENZER soru üretme:\n${exclude
+        .slice(0, 25)
+        .map((q) => `- ${q}`)
+        .join("\n")}`
+    : "";
+}
+
+export type CategoryCardSpec = {
+  id: string;
+  name: string;
+  emoji: string;
+  hard: boolean;
+};
+
+export async function generateCategoryQuestions(
+  cards: CategoryCardSpec[],
+  mode: ModeId,
+  exclude: string[],
+): Promise<TruthQuestion[]> {
+  const apiKey = process.env.AI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "AI_API_KEY ayarlanmamış. OpenAI uyumlu bir sağlayıcı anahtarı ekleyin.",
+    );
+  }
+
+  const baseUrl = (process.env.AI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const model = process.env.AI_MODEL ?? DEFAULT_MODEL;
+
+  const cardBlock = cards
+    .map(
+      (c, i) =>
+        `${i + 1}. ${c.emoji} ${c.name}${
+          c.hard
+            ? " — SERT SORU: bu kartın sorusu belirgin biçimde daha zor, cesur ve sınırları zorlayan olsun"
+            : ""
+        }`,
+    )
+    .join("\n");
+
+  const prompt = `Oyun: "Sınır Kartları" — bir doğruluk (truth) partisi oyunu.
+Görev: Yalnızca DOĞRULUK (truth) soruları üret. Soru olmayan hiçbir görev, eylem veya meydan okuma içeriği üretme.
+
+${buildModeBlock(mode)}
+
+Aşağıda 5 kart ve her kartın gizli kategorisi var. HER KART İÇİN TAM OLARAK 1 soru üret, sıraya birebir uy:
+${cardBlock}
+
+Kurallar:
+- ${cards.length} adet soru üret; sıra asla bozulmasın.
+- Her soru TEK cümle, "sen" hitabı, en fazla ~18 kelime, soru işaretiyle bitsin.
+- Sorular birbirinden ve klişelerden farklı olsun.
+- Kartın kategorisine uygun olsun (ör: "Gizli" → sırlar, "Aşk" → kalp işleri, "Geçmiş" → anılar/pişmanlıklar).
+- SERT işaretli kartın sorusu gerçekten zor, kışkırtıcı ve kişisel olsun; diğerleri daha rahat.
+${buildExcludeBlock(exclude)}
+
+Çıktı YALNIZCA geçerli bir JSON dizisi, kart sırasıyla, başka hiçbir metin olmadan:
+[{"text": "soru metni"}, {"text": "soru metni"}]`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.9,
+        max_tokens: 700,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Sen kurnaz bir doğruluk oyunu soru yazarısın. Sadece JSON dizisi döndürürsün.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Soru üretilemedi (${res.status}): ${detail.slice(0, 200)}`);
+  }
+
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  const content = data.choices?.[0]?.message?.content ?? "";
+
+  const items = extractJsonArray(content) as GeneratedItem[];
+  const questions: TruthQuestion[] = [];
+  for (let i = 0; i < cards.length; i++) {
+    const item = items[i];
+    const text = typeof item?.text === "string" ? item.text.trim() : "";
+    if (!text) continue;
+    const card = cards[i];
+    questions.push({
+      id: `ai-${Date.now()}-${i}`,
+      text,
+      tag: card.name,
+      intensity: card.hard ? "sinir-otesi" : "orta",
+      mode,
+    });
+  }
+  return questions;
+}
+
 export async function generateTruthQuestions(
   intensity: Intensity,
   mode: ModeId,
@@ -37,17 +163,9 @@ export async function generateTruthQuestions(
   const baseUrl = (process.env.AI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   const model = process.env.AI_MODEL ?? DEFAULT_MODEL;
 
-  const excludeBlock = exclude.length
-    ? `\nÖnceden sorulmuş sorulara AYNI veya ÇOK BENZER soru üretme:\n${exclude
-        .slice(0, 25)
-        .map((q) => `- ${q}`)
-        .join("\n")}`
-    : "";
+  const excludeBlock = buildExcludeBlock(exclude);
 
-  const modeBlock =
-    mode === "ekstrem"
-      ? `Bu bir +18 (yetişkin) oyun modu. Sorular yetişkinlere yönelik, cinsellik ve arzu temalı, açık ve rahatsız edici olabilen ama bir partide sesli söylenebilir tonda olsun. Kaba olmasın; rahatsız edici, nefret içeren, yasadışı veya zarar verici içerik yok.`
-      : `Bu bir standart mod. Sorular sınırları zorlasa da +18 ya da cinsel içerikli olmamalı; herkesin olduğu bir ortamda rahatça okunabilmeli.`;
+  const modeBlock = buildModeBlock(mode);
 
   const prompt = `Oyun: "Sınırlarını Aş" — bir doğruluk (truth) partisi oyunu.
 Görev: Yalnızca DOĞRULUK (truth) soruları üret. Soru olmayan hiçbir görev, eylem veya meydan okuma içeriği üretme.

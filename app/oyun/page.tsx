@@ -5,35 +5,22 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { SpatialBackground } from "@/components/SpatialBackground";
 import { QuestionCard } from "@/components/oyun/QuestionCard";
-import { TiltCard } from "@/components/TiltCard";
+import { CardFlip, type RoundCard } from "@/components/oyun/CardFlip";
 import {
-  INTENSITIES,
+  CATEGORIES,
   MODES,
-  getIntensity,
-  getQuestionsByIntensity,
+  getLocalQuestionForCategory,
   normalizeText,
-  type IntensityId,
   type ModeId,
   type TruthQuestion,
 } from "@/lib/questions";
 
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS = 2;
-const RAMP_EVERY = 4;
-
-function shuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
 
 export default function OyunPage() {
   const [phase, setPhase] = useState<"setup" | "play">("setup");
 
-  const [intensity, setIntensity] = useState<IntensityId>("hafif");
   const [mode, setMode] = useState<ModeId>("soft");
   const [confirmingExtreme, setConfirmingExtreme] = useState(false);
   const [playerCount, setPlayerCount] = useState(3);
@@ -43,25 +30,14 @@ export default function OyunPage() {
 
   const [players, setPlayers] = useState<string[]>([]);
   const [current, setCurrent] = useState(0);
-  const [deck, setDeck] = useState<TruthQuestion[]>([]);
-  const [deckLevel, setDeckLevel] = useState<IntensityId>("hafif");
-  const [askedCount, setAskedCount] = useState(0);
-  const [generating, setGenerating] = useState(false);
+  const [roundCards, setRoundCards] = useState<RoundCard[]>([]);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [loadingRound, setLoadingRound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const askedRef = useRef<string[]>([]);
-  const refillingRef = useRef(false);
-  const deckLevelRef = useRef<IntensityId>("hafif");
-  const refillLevelRef = useRef<IntensityId>("hafif");
 
-  const question = deck[0] ?? null;
-
-  function levelFor(asked: number): IntensityId {
-    const startIdx = INTENSITIES.findIndex((i) => i.id === intensity);
-    const ramp = Math.floor(asked / RAMP_EVERY);
-    const idx = Math.min(startIdx + ramp, INTENSITIES.length - 1);
-    return INTENSITIES[idx].id;
-  }
+  const pickedCard = roundCards.find((c) => c.revealed && c.question) ?? null;
 
   function changePlayerCount(next: number) {
     const count = Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, next));
@@ -91,105 +67,105 @@ export default function OyunPage() {
     const cleanNames = names.map((n, i) => n.trim() || `Oyuncu ${i + 1}`);
     setPlayers(cleanNames);
     askedRef.current = [];
-    const first = levelFor(0);
-    deckLevelRef.current = first;
-    setDeckLevel(first);
-    setDeck(shuffle(getQuestionsByIntensity(first, mode)));
-    setAskedCount(0);
+    setQuestionCount(0);
     setCurrent(0);
     setError(null);
     setPhase("play");
-    void refill(first);
+    void dealRound();
   }
 
-  async function refill(level: IntensityId) {
-    if (refillingRef.current) return;
-    refillingRef.current = true;
-    refillLevelRef.current = level;
-    setGenerating(true);
+  async function dealRound() {
+    setLoadingRound(true);
     setError(null);
-    try {
-      const res = await fetch("/api/questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          intensity: level,
+    const roundId = Date.now();
+    const hardIdx = Math.floor(Math.random() * CATEGORIES.length);
+    const cards: RoundCard[] = CATEGORIES.map((category, i) => ({
+      key: `${roundId}-${i}`,
+      category,
+      hard: i === hardIdx,
+      question: null,
+      revealed: false,
+    }));
+
+    let aiQuestions: TruthQuestion[] = [];
+    if (Math.random() < 0.9) {
+      try {
+        const res = await fetch("/api/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode,
+            cards: cards.map((c) => ({
+              id: c.category.id,
+              name: c.category.name,
+              emoji: c.category.emoji,
+              hard: c.hard,
+            })),
+            exclude: askedRef.current.slice(-25),
+          }),
+        });
+        const data = (await res.json()) as {
+          questions?: TruthQuestion[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
+        aiQuestions = data.questions ?? [];
+      } catch {
+        aiQuestions = [];
+      }
+    }
+
+    const usedTexts = new Set<string>();
+    const assigned: RoundCard[] = cards.map((card, i) => {
+      const aiQ = aiQuestions[i];
+      let question: TruthQuestion | null = null;
+      if (aiQ && typeof aiQ.text === "string" && aiQ.text.trim()) {
+        question = { ...aiQ, tag: card.category.name };
+      } else {
+        question = getLocalQuestionForCategory(
+          card.category,
+          card.hard,
           mode,
-          exclude: askedRef.current.slice(-25),
-        }),
-      });
-      const data = (await res.json()) as {
-        questions?: TruthQuestion[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
-      appendToDeck(data.questions ?? [], level);
-    } catch (e) {
-      if (refillLevelRef.current !== deckLevelRef.current) return;
-      const fallback = getQuestionsByIntensity(level, mode).filter(
-        (q) => !askedRef.current.includes(normalizeText(q.text)),
-      );
-      setDeck((prev) => (prev.length === 0 && fallback.length > 0 ? fallback : prev));
-      if (fallback.length === 0) {
-        setError(
-          e instanceof Error ? e.message : "Yeni soru üretilemedi. Tekrar deneyin.",
+          [...askedRef.current, ...usedTexts],
         );
       }
-    } finally {
-      refillingRef.current = false;
-      setGenerating(false);
-    }
-  }
-
-  function appendToDeck(incoming: TruthQuestion[], level: IntensityId) {
-    if (refillLevelRef.current !== deckLevelRef.current) return;
-    setDeck((prev) => {
-      const seen = new Set(prev.map((q) => normalizeText(q.text)));
-      const fresh = incoming.filter(
-        (q) =>
-          q &&
-          typeof q.text === "string" &&
-          !seen.has(normalizeText(q.text)) &&
-          !askedRef.current.includes(normalizeText(q.text)),
-      );
-      const fallback = getQuestionsByIntensity(level, mode).filter(
-        (q) =>
-          !seen.has(normalizeText(q.text)) &&
-          !askedRef.current.includes(normalizeText(q.text)),
-      );
-      return [...prev, ...fresh, ...fallback];
+      if (question) usedTexts.add(normalizeText(question.text));
+      return { ...card, question };
     });
+
+    setRoundCards(assigned);
+    setLoadingRound(false);
   }
 
-  function nextQuestion(samePlayer: boolean) {
-    const [head, ...rest] = deck;
-    const nextCount = askedCount + (head ? 1 : 0);
-    const nextLevel = levelFor(nextCount);
+  function pickCard(index: number) {
+    if (loadingRound || pickedCard) return;
+    setRoundCards((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, revealed: true } : c)),
+    );
+  }
 
-    if (head) {
-      askedRef.current.push(normalizeText(head.text));
+  function skipRound() {
+    if (loadingRound) return;
+    void dealRound();
+  }
+
+  function advanceRound(samePlayer: boolean) {
+    const picked = roundCards.find((c) => c.revealed && c.question);
+    if (picked?.question) {
+      askedRef.current.push(normalizeText(picked.question.text));
     }
-
-    if (nextLevel !== deckLevel) {
-      deckLevelRef.current = nextLevel;
-      setDeckLevel(nextLevel);
-      setDeck(shuffle(getQuestionsByIntensity(nextLevel, mode)));
-      void refill(nextLevel);
-    } else {
-      if (rest.length <= 4) void refill(nextLevel);
-      setDeck(rest);
-    }
-
-    setAskedCount(nextCount);
+    setQuestionCount((c) => c + 1);
     if (!samePlayer) {
       setCurrent((c) => (c + 1) % players.length);
     }
+    void dealRound();
   }
 
   function restart() {
     askedRef.current = [];
-    setDeck([]);
+    setRoundCards([]);
     setError(null);
+    setQuestionCount(0);
     setPhase("setup");
   }
 
@@ -214,7 +190,7 @@ export default function OyunPage() {
             Geri
           </Link>
           <span className="glass-cream rounded-full border border-cola-500/15 px-4 py-2 font-display text-[11px] font-bold tracking-[0.2em] text-cola-600 uppercase">
-            Kerbela Çölleri
+            Sınır Kartları
           </span>
         </header>
 
@@ -235,8 +211,8 @@ export default function OyunPage() {
                   Oyunu <span className="text-cola-500">Kur</span>
                 </motion.h1>
                 <p className="mt-3 text-sm font-medium text-cola-800/70">
-                  Zorluk seç, oyuncuları yaz, sınırları zorlamaya başla. Oyun
-                  seçtiğin seviyede başlar; her {RAMP_EVERY} soruda seviye yükselir.
+                  Masaya 5 kart, arkada 5 gizli kategori. Birinin rengi farklı —
+                  onun sorusu sert. Sıran gelince bir kart seç, kart konuşsun.
                 </p>
               </div>
 
@@ -244,70 +220,6 @@ export default function OyunPage() {
                 <h2 className="mb-4 flex items-center gap-3 font-display text-xs font-bold tracking-[0.25em] text-cola-500 uppercase">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cola-600 text-[11px] text-cream-100">
                     1
-                  </span>
-                  Zorluk seviyesi
-                </h2>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {INTENSITIES.map((level) => {
-                    const active = level.id === intensity;
-                    return (
-                      <TiltCard key={level.id} maxTilt={12} className="h-full">
-                        <button
-                          onClick={() => setIntensity(level.id)}
-                          aria-pressed={active}
-                          className={`relative flex h-full w-full flex-col gap-3 rounded-3xl border p-5 text-left transition-all duration-300 ${
-                            active
-                              ? "border-cola-500/60 bg-gradient-to-br from-cola-600/15 to-cola-800/20 shadow-pop"
-                              : "glass-cream border-cola-500/15 hover:border-cola-500/35"
-                          }`}
-                        >
-                          {active && (
-                            <span className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-cola-600 text-sm text-cream-100 shadow-pop">
-                              ✓
-                            </span>
-                          )}
-                          <span
-                            className="text-3xl"
-                            style={{ transform: "translateZ(30px)" }}
-                          >
-                            {level.emoji}
-                          </span>
-                          <div
-                            style={{ transform: "translateZ(40px)" }}
-                          >
-                            <p className="font-display text-sm font-bold text-cola-800 uppercase">
-                              {level.name}
-                            </p>
-                            <p className="mt-1 text-xs text-cola-800/60">
-                              {level.tagline}
-                            </p>
-                          </div>
-                          <div
-                            className="flex gap-1"
-                            style={{ transform: "translateZ(25px)" }}
-                          >
-                            {Array.from({ length: 4 }).map((_, dot) => (
-                              <span
-                                key={dot}
-                                className={`h-1.5 w-6 rounded-full ${
-                                  dot < level.level
-                                    ? "bg-gradient-to-r from-cola-500 to-cola-700"
-                                    : "bg-cola-900/10"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </button>
-                      </TiltCard>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="mb-12">
-                <h2 className="mb-4 flex items-center gap-3 font-display text-xs font-bold tracking-[0.25em] text-cola-500 uppercase">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cola-600 text-[11px] text-cream-100">
-                    2
                   </span>
                   Mod
                 </h2>
@@ -359,7 +271,7 @@ export default function OyunPage() {
               <section>
                 <h2 className="mb-4 flex items-center gap-3 font-display text-xs font-bold tracking-[0.25em] text-cola-500 uppercase">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cola-600 text-[11px] text-cream-100">
-                    3
+                    2
                   </span>
                   Oyuncular
                 </h2>
@@ -423,7 +335,7 @@ export default function OyunPage() {
                   className="group relative mt-8 inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-full bg-gradient-to-br from-cola-600 via-cola-700 to-cola-900 px-9 py-4 font-display text-sm font-bold tracking-widest text-cream-100 uppercase shadow-cola transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-cream-100/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                  Oyunu Başlat
+                  Kartları Dağıt
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                     <path
                       d="M3 8h10M9 4l4 4-4 4"
@@ -461,45 +373,63 @@ export default function OyunPage() {
                       {players[current] ?? "Oyuncu"}
                     </span>
                     <span className="text-xs font-semibold tracking-wider text-cola-500 uppercase">
-                      sıra sende
+                      bir kart seçsin
                     </span>
                   </motion.div>
                 </AnimatePresence>
 
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={deckLevel}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.25 }}
-                    className="flex items-center gap-2 rounded-full border border-cola-500/20 bg-cream-100/80 py-2 pr-5 pl-2 shadow-soft backdrop-blur"
-                  >
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <span className="flex items-center gap-2 rounded-full border border-cola-500/20 bg-cream-100/80 py-2 pr-5 pl-2 shadow-soft backdrop-blur">
                     <span className="font-display flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cola-600 to-cola-900 text-base">
-                      {getIntensity(deckLevel).emoji}
+                      🎴
                     </span>
                     <span className="text-sm font-bold text-cola-800">
-                      {getIntensity(deckLevel).name}
+                      Soru {String(questionCount + 1).padStart(2, "0")}
                     </span>
-                    <span className="text-xs font-semibold tracking-wider text-cola-500 uppercase">
-                      Seviye {getIntensity(deckLevel).level}/4
+                  </span>
+                  <span className="flex items-center gap-2 rounded-full border border-cola-500/20 bg-cream-100/80 py-2 pr-5 pl-2 shadow-soft backdrop-blur">
+                    <span className="font-display flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cola-700 to-cola-900 text-base">
+                      ⚡
                     </span>
-                  </motion.div>
-                </AnimatePresence>
+                    <span className="text-sm font-bold text-cola-800">
+                      1 sert kart
+                    </span>
+                  </span>
+                </div>
 
-                {generating && (
+                {loadingRound && (
                   <span className="flex items-center gap-1.5 rounded-full bg-cola-600/10 px-3 py-1 text-[10px] font-bold tracking-wider text-cola-700 uppercase">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cola-600" />
-                    ✨ Yapay zekâ yeni sorular üretiyor
+                    Kerbela Hüseyin yeni sorular üretiyor
                   </span>
                 )}
               </div>
 
-              {question ? (
+              <div className="mb-10">
+                <p className="mb-4 text-center text-xs font-bold tracking-[0.3em] text-cola-500 uppercase">
+                  Kategoriler gizli · farklı renk = sert kart
+                </p>
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-4">
+                  {roundCards.map((card, i) => (
+                    <div key={card.key} className="h-52 sm:h-64">
+                      <CardFlip
+                        card={card}
+                        index={i}
+                        onPick={() => pickCard(i)}
+                        disabled={loadingRound || !!pickedCard}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {pickedCard ? (
                 <QuestionCard
-                  question={question}
-                  index={askedCount}
+                  question={pickedCard.question!}
+                  index={questionCount}
                   playerName={players[current] ?? "Oyuncu"}
+                  category={pickedCard.category}
+                  hard={pickedCard.hard}
                 />
               ) : error ? (
                 <div className="glass-cream mx-auto flex max-w-md flex-col items-center gap-4 rounded-3xl border border-cola-500/20 px-8 py-10 text-center shadow-card">
@@ -509,10 +439,7 @@ export default function OyunPage() {
                   </p>
                   <p className="text-sm text-cola-800/70">{error}</p>
                   <button
-                    onClick={() => {
-                      setError(null);
-                      void refill(deckLevel);
-                    }}
+                    onClick={() => void dealRound()}
                     className="mt-2 rounded-full bg-gradient-to-br from-cola-600 to-cola-900 px-7 py-3 text-xs font-bold tracking-widest text-cream-100 uppercase shadow-pop transition-transform hover:scale-105"
                   >
                     Tekrar dene
@@ -544,27 +471,29 @@ export default function OyunPage() {
                     </span>
                   </div>
                   <p className="font-display text-sm font-bold tracking-[0.2em] text-cola-700 uppercase">
-                    Yapay zekâ yeni sorular üretiyor…
+                    Kerbela Hüseyin yeni sorular üretiyor…
                   </p>
                 </div>
               )}
 
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <button
-                  onClick={() => nextQuestion(false)}
-                  disabled={!question}
+                  onClick={() => advanceRound(false)}
+                  disabled={!pickedCard || loadingRound}
                   className="group relative inline-flex w-full items-center justify-center gap-3 overflow-hidden rounded-full bg-gradient-to-br from-cola-500 via-cola-700 to-cola-900 px-9 py-4 font-display text-sm font-bold tracking-widest text-cream-100 uppercase shadow-cola transition-transform duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 sm:w-auto"
                 >
                   <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-cream-100/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   Cevap verildi, sıradaki →
                 </button>
-                <button
-                  onClick={() => nextQuestion(true)}
-                  disabled={!question}
-                  className="glass-cream inline-flex w-full items-center justify-center gap-2 rounded-full border border-cola-500/20 px-7 py-4 text-sm font-bold text-cola-700 uppercase transition-colors hover:border-cola-500/40 hover:text-cola-600 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-                >
-                  🔄 Yeni soru
-                </button>
+                {!pickedCard && (
+                  <button
+                    onClick={skipRound}
+                    disabled={loadingRound}
+                    className="glass-cream inline-flex w-full items-center justify-center gap-2 rounded-full border border-cola-500/20 px-7 py-4 text-sm font-bold text-cola-700 uppercase transition-colors hover:border-cola-500/40 hover:text-cola-600 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  >
+                    🔄 Kartları yeniden dağıt
+                  </button>
+                )}
                 <button
                   onClick={restart}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-full px-5 py-4 text-xs font-bold tracking-widest text-cola-800/50 uppercase transition-colors hover:text-cola-700 sm:w-auto"

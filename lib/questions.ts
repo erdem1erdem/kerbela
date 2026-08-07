@@ -46,6 +46,50 @@ export type Intensity = {
   level: number;
 };
 
+export type Category = {
+  id: string;
+  name: string;
+  emoji: string;
+  tags: string[];
+};
+
+export const CATEGORIES: Category[] = [
+  {
+    id: "hayat",
+    name: "Hayat",
+    emoji: "🧠",
+    tags: ["Hayat", "Hayal", "Zevk", "Eşya", "Dijital"],
+  },
+  {
+    id: "gizli",
+    name: "Gizli",
+    emoji: "🎭",
+    tags: ["Gizli", "Korku"],
+  },
+  {
+    id: "gecmis",
+    name: "Geçmiş",
+    emoji: "📜",
+    tags: ["Geçmiş", "Anı", "Öz eleştiri"],
+  },
+  {
+    id: "ask",
+    name: "Aşk",
+    emoji: "❤️",
+    tags: ["Kalp", "Flört", "Romantik", "İlişki"],
+  },
+  {
+    id: "sinir",
+    name: "Sınır",
+    emoji: "🔥",
+    tags: ["Sınır", "İnsanlar", "Duygu", "Fantezi", "Arzu", "Gece", "Deneyim"],
+  },
+];
+
+export function getCategory(id: string): Category {
+  return CATEGORIES.find((c) => c.id === id) ?? CATEGORIES[0];
+}
+
 export const INTENSITIES: Intensity[] = [
   {
     id: "hafif",
@@ -711,6 +755,27 @@ export function getQuestionsByIntensity(
 
 export function getIntensity(id: IntensityId): Intensity {
   return INTENSITIES.find((i) => i.id === id) ?? INTENSITIES[0];
+}
+
+export function getLocalQuestionForCategory(
+  category: Category,
+  hard: boolean,
+  mode: ModeId,
+  exclude: string[],
+): TruthQuestion | null {
+  const preferred = hard ? "sinir-otesi" : "orta";
+  const pool = QUESTIONS.filter((q) => (q.mode ?? "soft") === mode);
+  let candidates = pool.filter((q) => category.tags.includes(q.tag));
+  if (candidates.length === 0) {
+    candidates = pool.filter((q) => q.intensity === preferred);
+  }
+  if (candidates.length === 0) candidates = pool;
+  const atPreferred = candidates.filter((q) => q.intensity === preferred);
+  const usable = atPreferred.length > 0 ? atPreferred : candidates;
+  const fresh = usable.filter((q) => !exclude.includes(normalizeText(q.text)));
+  const chosen = fresh.length > 0 ? fresh : usable;
+  if (chosen.length === 0) return null;
+  return chosen[Math.floor(Math.random() * chosen.length)];
 }
 
 export function getRandomQuestions(intensity: IntensityId, count: number): TruthQuestion[] {

@@ -1,23 +1,23 @@
 import { SpatialBackground } from "@/components/SpatialBackground";
 import { Hero } from "@/components/Hero";
 import { TiltCard } from "@/components/TiltCard";
-import { INTENSITIES } from "@/lib/questions";
+import { CATEGORIES } from "@/lib/questions";
 
 const RULES = [
   {
-    icon: "🎯",
-    title: "Gerçeği Söyle",
-    text: "Soruyu oku, herkesin duyacağı şekilde gerçekten cevap ver. Yalan yakalanırsa tur geçer.",
+    icon: "🎴",
+    title: "Kartını Seç",
+    text: "Masada 5 kart, arkasında 5 gizli kategori. Sıran gelince birini seç; seçtiğin kart açılır ve konuşur.",
   },
   {
-    icon: "🌡️",
-    title: "Seviyeni Seç",
-    text: "Hafif ısınmadan sınır ötesine kadar dört seviye var. Seviye yükseldikçe sorular keskinleşir.",
+    icon: "⚡",
+    title: "Sert Kart",
+    text: "Bir kartın rengi farklıdır. Onu seçersen sınırları zorlayan sert bir soruyla karşılaşırsın. Cesaretin varsa aç.",
   },
   {
-    icon: "🔄",
-    title: "Sıra Sende",
-    text: "Cevap veren kişi bir sonraki soruyu çeker. Oyunun sonu yok, sınırların var.",
+    icon: "🤖",
+    title: "Zeki Sorular",
+    text: "Soruları yapay zekâ üretir, kategoriler her tur yenilenir. Aynı soru asla iki kez karşına çıkmaz.",
   },
 ];
 
@@ -82,14 +82,14 @@ export default function Home() {
               <div className="flex flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
                 <div>
                   <p className="font-display text-xs font-bold tracking-[0.3em] text-cola-300 uppercase">
-                    {INTENSITIES.length} seviye zorluk
+                    {CATEGORIES.length} gizli kategori
                   </p>
                   <h2 className="font-display mt-2 text-2xl font-black tracking-tight text-cream-100 uppercase sm:text-3xl">
-                    Hangisine dayanabilirsin?
+                    Hangi kartı açacaksın?
                   </h2>
                   <p className="mt-2 max-w-lg text-sm text-cream-100/70">
-                    Sınır ötesi sorular yalnızca en yakın arkadaş grubunla
-                    oynanmalı. Kızaran yanaklar oyunun doğal parçasıdır.
+                    Sert kart yalnızca en yakın arkadaş grubunla oynanmalı.
+                    Kızaran yanaklar oyunun doğal parçasıdır.
                   </p>
                 </div>
               </div>

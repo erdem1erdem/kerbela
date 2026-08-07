@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getIntensity, type IntensityId, type ModeId } from "@/lib/questions";
-import { generateTruthQuestions } from "@/lib/llm";
+import {
+  generateCategoryQuestions,
+  generateTruthQuestions,
+  type CategoryCardSpec,
+} from "@/lib/llm";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +12,7 @@ type Body = {
   intensity?: IntensityId;
   mode?: ModeId;
   exclude?: string[];
+  cards?: CategoryCardSpec[];
 };
 
 export async function POST(req: NextRequest) {
@@ -18,7 +23,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Geçersiz istek" }, { status: 400 });
   }
 
-  const intensity = getIntensity(body.intensity ?? "hafif");
   const mode: ModeId = body.mode === "ekstrem" ? "ekstrem" : "soft";
   const exclude = (body.exclude ?? []).slice(0, 25);
 
@@ -30,7 +34,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const questions = await generateTruthQuestions(intensity, mode, exclude);
+    const questions =
+      Array.isArray(body.cards) && body.cards.length > 0
+        ? await generateCategoryQuestions(body.cards, mode, exclude)
+        : await generateTruthQuestions(
+            getIntensity(body.intensity ?? "hafif"),
+            mode,
+            exclude,
+          );
     if (questions.length === 0) {
       return NextResponse.json(
         { error: "Üretici geçerli soru döndürmedi, tekrar deneyin." },
