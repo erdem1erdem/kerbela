@@ -45,9 +45,6 @@ const DEFAULT_GEMINI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/openai";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
-const DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1";
-const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
-
 type ProviderConfig = {
   label: string;
   baseUrl: string;
@@ -67,66 +64,25 @@ class ProviderError extends Error {
   }
 }
 
-const disabledProviders = new Set<string>();
 let lastUsedProvider: string | null = null;
 
 export function getLastUsedProvider(): string | null {
   return lastUsedProvider;
 }
 
-function providerKey(config: ProviderConfig): string {
-  return `${config.label}|${config.model}`;
-}
-
-function disableProvider(config: ProviderConfig, reason: string) {
-  const key = providerKey(config);
-  if (disabledProviders.has(key)) return;
-  disabledProviders.add(key);
-  console.warn(
-    `[AI] ${config.label} (${config.model}) devre dışı bırakıldı: ${reason}`,
-  );
-}
-
 function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-/**
- * Sağlayıcı sırası:
- *
- * 1. Gemini
- * 2. Groq
- *
- * Bir sağlayıcı hata verirse veya boş cevap döndürürse sonraki sağlayıcı
- * otomatik denenir. Sunucu hatası (5xx) veren sağlayıcı sunucu yeniden
- * başlatılana kadar devre dışı bırakılır.
- */
-function providerConfigs(): ProviderConfig[] {
-  const providers: ProviderConfig[] = [
-    {
-      label: "Gemini",
-      baseUrl: normalizeBaseUrl(
-        process.env.GEMINI_BASE_URL ?? DEFAULT_GEMINI_BASE_URL,
-      ),
-      apiKey: process.env.GEMINI_API_KEY ?? "",
-      model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
-    },
-    {
-      label: "Groq",
-      baseUrl: normalizeBaseUrl(
-        process.env.GROQ_BASE_URL ?? DEFAULT_GROQ_BASE_URL,
-      ),
-      apiKey: process.env.GROQ_API_KEY ?? "",
-      model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-    },
-  ];
-
-  return providers.filter(
-    (provider) =>
-      provider.apiKey.trim() !== "" &&
-      provider.model.trim() !== "" &&
-      !disabledProviders.has(providerKey(provider)),
-  );
+function providerConfig(): ProviderConfig {
+  return {
+    label: "Gemini",
+    baseUrl: normalizeBaseUrl(
+      process.env.GEMINI_BASE_URL ?? DEFAULT_GEMINI_BASE_URL,
+    ),
+    apiKey: process.env.GEMINI_API_KEY ?? "",
+    model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+  };
 }
 
 async function fetchCompletion(
@@ -202,53 +158,27 @@ async function callLlm(
   system: string,
   prompt: string,
 ): Promise<string> {
-  const configs = providerConfigs();
+  const config = providerConfig();
 
-  if (configs.length === 0) {
+  if (
+    config.apiKey.trim() === "" ||
+    config.model.trim() === ""
+  ) {
     throw new Error(
       "Hiçbir AI sağlayıcısı yapılandırılmamış. " +
-        "GEMINI_API_KEY veya GROQ_API_KEY değişkenini .env'e ekleyin.",
+        "GEMINI_API_KEY değişkenini .env'e ekleyin.",
     );
   }
 
-  let lastError: Error | null = null;
+  const content = await fetchCompletion(config, system, prompt);
 
-  for (const config of configs) {
-    try {
-      const content = await fetchCompletion(config, system, prompt);
-
-      if (content.trim()) {
-        lastUsedProvider = config.label;
-        console.info(`[AI] ${config.label} kullanıldı (${config.model})`);
-        return content;
-      }
-
-      lastError = new Error(`${config.label} boş içerik döndürdü.`);
-    } catch (err) {
-      lastError =
-        err instanceof Error
-          ? err
-          : new Error(`${config.label} bilinmeyen üretim hatası`);
-
-      if (
-        err instanceof ProviderError &&
-        err.status >= 500 &&
-        err.status < 600
-      ) {
-        disableProvider(config, lastError.message);
-      }
-
-      console.warn(
-        `[AI] ${config.label} başarısız, sonraki sağlayıcı deneniyor:`,
-        lastError.message,
-      );
-    }
+  if (content.trim()) {
+    lastUsedProvider = config.label;
+    console.info(`[AI] ${config.label} kullanıldı (${config.model})`);
+    return content;
   }
 
-  throw (
-    lastError ??
-    new Error("Tüm AI sağlayıcıları başarısız oldu.")
-  );
+  throw new Error(`${config.label} boş içerik döndürdü.`);
 }
 
 export type CategoryCardSpec = {

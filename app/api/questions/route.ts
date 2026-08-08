@@ -44,9 +44,9 @@ export async function POST(req: NextRequest) {
     : "orta";
   const exclude = (body.exclude ?? []).slice(0, 40);
 
-  if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "Hiçbir AI sağlayıcısı yapılandırılmamış. GEMINI_API_KEY veya GROQ_API_KEY değişkenini .env'e ekleyin." },
+      { error: "Hiçbir AI sağlayıcısı yapılandırılmamış. GEMINI_API_KEY değişkenini .env'e ekleyin." },
       { status: 501 },
     );
   }
