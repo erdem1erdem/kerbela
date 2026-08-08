@@ -6,19 +6,29 @@ import Link from "next/link";
 import { SpatialBackground } from "@/components/SpatialBackground";
 import { QuestionCard } from "@/components/oyun/QuestionCard";
 import { CardFlip, type RoundCard } from "@/components/oyun/CardFlip";
+import { loadVoices, speak } from "@/lib/tts";
 import {
   CATEGORIES,
+  INTENSITIES,
   MODES,
+  containsProfanity,
+  dedupeKey,
   fillPlayerPlaceholder,
-  getLocalQuestionForCategory,
+  getIntensity,
+  getSertIntensity,
   normalizeText,
   type Category,
+  type IntensityId,
   type ModeId,
   type TruthQuestion,
 } from "@/lib/questions";
 
 const MAX_PLAYERS = 8;
 const MIN_PLAYERS = 2;
+
+const MERSIYE = `Kerbela gulak ver, sahra ağlar, çöl ağlar.
+Nalet olsun Yezid'e, şah u geda, gül ağlar.
+Ey Mürteza, gel yetiş, binekte Düldül ağlar.`;
 
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
@@ -39,14 +49,11 @@ function pickHardIndex(): number {
   return Math.floor(Math.random() * 5);
 }
 
-function shouldUseAi(): boolean {
-  return Math.random() < 0.9;
-}
-
 export default function OyunPage() {
   const [phase, setPhase] = useState<"setup" | "play">("setup");
 
   const [mode, setMode] = useState<ModeId>("soft");
+  const [level, setLevel] = useState<IntensityId>("orta");
   const [confirmingExtreme, setConfirmingExtreme] = useState(false);
   const [playerCount, setPlayerCount] = useState(3);
   const [names, setNames] = useState<string[]>(() =>
@@ -60,8 +67,8 @@ export default function OyunPage() {
   const [loadingRound, setLoadingRound] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const askedRef = useRef<string[]>([]);
   const dealtRef = useRef<string[]>([]);
+  const seenKeysRef = useRef<string[]>([]);
 
   const pickedCard = roundCards.find((c) => c.revealed && c.question) ?? null;
 
@@ -92,13 +99,70 @@ export default function OyunPage() {
   function startGame() {
     const cleanNames = names.map((n, i) => n.trim() || `Oyuncu ${i + 1}`);
     setPlayers(cleanNames);
-    askedRef.current = [];
     dealtRef.current = [];
+    seenKeysRef.current = [];
     setQuestionCount(0);
     setCurrent(0);
     setError(null);
     setPhase("play");
+    loadVoices();
+    speak(MERSIYE);
     void dealRound(cleanNames[0], cleanNames);
+  }
+
+  async function requestAiQuestions(
+    cards: { category: Category; hard: boolean }[],
+    playerList: string[],
+  ): Promise<TruthQuestion[]> {
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch("/api/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode,
+            level,
+            players: playerList,
+            cards: cards.map((c) => ({
+              id: c.category.id,
+              name: c.category.name,
+              emoji: c.category.emoji,
+              hard: c.hard,
+            })),
+            exclude: dealtRef.current.slice(-40),
+          }),
+        });
+        const data = (await res.json()) as {
+          questions?: TruthQuestion[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
+        return data.questions ?? [];
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error("Soru üretilemedi");
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      }
+    }
+    throw lastError ?? new Error("Soru üretilemedi");
+  }
+
+  function adoptAiQuestion(
+    q: TruthQuestion | undefined,
+    category: Category,
+    intensity: IntensityId,
+    currentPlayerName: string,
+    playerList: string[],
+    usedKeys: Set<string>,
+  ): TruthQuestion | null {
+    if (!q || typeof q.text !== "string" || !q.text.trim()) return null;
+    const otherPlayers = playerList.filter((p) => p !== currentPlayerName);
+    const filled = fillPlayerPlaceholder(q.text, currentPlayerName, otherPlayers);
+    if (containsProfanity(filled)) return null;
+    const key = dedupeKey(filled, playerList);
+    if (usedKeys.has(key) || seenKeysRef.current.includes(key)) return null;
+    usedKeys.add(key);
+    return { ...q, tag: category.name, intensity, mode, text: filled };
   }
 
   async function dealRound(currentPlayerName: string, playerList: string[]) {
@@ -116,78 +180,68 @@ export default function OyunPage() {
         revealed: false,
       }));
 
-    const otherPlayers = playerList.filter((p) => p !== currentPlayerName);
+    const sertLevel = getSertIntensity(level);
 
     let aiQuestions: TruthQuestion[] = [];
-    if (shouldUseAi()) {
-      try {
-        const res = await fetch("/api/questions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode,
-            players: playerList,
-            cards: cards.map((c) => ({
-              id: c.category.id,
-              name: c.category.name,
-              emoji: c.category.emoji,
-              hard: c.hard,
-            })),
-            exclude: dealtRef.current.slice(-40),
-          }),
-        });
-        const data = (await res.json()) as {
-          questions?: TruthQuestion[];
-          error?: string;
-        };
-        if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
-        aiQuestions = data.questions ?? [];
-      } catch {
-        aiQuestions = [];
-      }
+    try {
+      aiQuestions = await requestAiQuestions(
+        cards.map((c) => ({ category: c.category, hard: c.hard })),
+        playerList,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Soru üretilemedi");
+      setRoundCards(cards);
+      setLoadingRound(false);
+      return;
     }
 
-    const usedTexts = new Set<string>();
-    const assigned: RoundCard[] = cards.map((card, i) => {
-      const aiQ = aiQuestions[i];
-      let question: TruthQuestion | null = null;
-      if (aiQ && typeof aiQ.text === "string" && aiQ.text.trim()) {
-        const filled: TruthQuestion = {
-          ...aiQ,
-          tag: card.category.name,
-          text: fillPlayerPlaceholder(aiQ.text, currentPlayerName, otherPlayers),
-        };
-        const norm = normalizeText(filled.text);
-        if (!usedTexts.has(norm) && !dealtRef.current.includes(norm)) {
-          question = filled;
+    const usedKeys = new Set<string>();
+    const assigned: RoundCard[] = [];
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const cardIntensity = card.hard ? sertLevel : level;
+      let question = adoptAiQuestion(
+        aiQuestions[i],
+        card.category,
+        cardIntensity,
+        currentPlayerName,
+        playerList,
+        usedKeys,
+      );
+      for (let attempt = 0; attempt < 3 && !question; attempt++) {
+        let one: TruthQuestion[] = [];
+        try {
+          one = await requestAiQuestions(
+            [{ category: card.category, hard: card.hard }],
+            playerList,
+          );
+        } catch {
+          break;
         }
-      }
-      if (!question) {
-        const local = getLocalQuestionForCategory(
+        question = adoptAiQuestion(
+          one[0],
           card.category,
-          card.hard,
-          mode,
-          [...askedRef.current, ...usedTexts],
+          cardIntensity,
+          currentPlayerName,
+          playerList,
+          usedKeys,
         );
-        if (local) {
-          question = {
-            ...local,
-            text: fillPlayerPlaceholder(
-              local.text,
-              currentPlayerName,
-              otherPlayers,
-            ),
-          };
-        }
       }
-      if (question) usedTexts.add(normalizeText(question.text));
-      return { ...card, question };
-    });
+      assigned.push({ ...card, question });
+    }
+
+    if (assigned.some((c) => !c.question)) {
+      setError("Tüm kartlar için soru üretilemedi, tekrar deneyin.");
+      setRoundCards(assigned);
+      setLoadingRound(false);
+      return;
+    }
 
     dealtRef.current.push(
-      ...assigned
-        .filter((c) => c.question)
-        .map((c) => normalizeText(c.question!.text)),
+      ...assigned.map((c) => normalizeText(c.question!.text)),
+    );
+    seenKeysRef.current.push(
+      ...assigned.map((c) => dedupeKey(c.question!.text, playerList)),
     );
 
     setRoundCards(assigned);
@@ -199,49 +253,29 @@ export default function OyunPage() {
     currentPlayerName: string,
     playerList: string[],
   ): Promise<TruthQuestion | null> {
-    const otherPlayers = playerList.filter((p) => p !== currentPlayerName);
-    try {
-      const res = await fetch("/api/questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode,
-          players: playerList,
-          cards: [
-            {
-              id: category.id,
-              name: category.name,
-              emoji: category.emoji,
-              hard: true,
-            },
-          ],
-          exclude: dealtRef.current.slice(-40),
-        }),
-      });
-      const data = (await res.json()) as {
-        questions?: TruthQuestion[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(data.error ?? "Soru üretilemedi");
-      const q = data.questions?.[0];
-      if (q && typeof q.text === "string" && q.text.trim()) {
-        return {
-          ...q,
-          tag: category.name,
-          intensity: "sinir-otesi",
-          mode,
-          text: fillPlayerPlaceholder(q.text, currentPlayerName, otherPlayers),
-        };
+    const sertLevel = getSertIntensity(level);
+    const usedKeys = new Set<string>();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let one: TruthQuestion[] = [];
+      try {
+        one = await requestAiQuestions(
+          [{ category, hard: true }],
+          playerList,
+        );
+      } catch {
+        return null;
       }
-    } catch {
-      // yerel havuzdan sert soru ile devam
+      const q = adoptAiQuestion(
+        one[0],
+        category,
+        sertLevel,
+        currentPlayerName,
+        playerList,
+        usedKeys,
+      );
+      if (q) return q;
     }
-    const local = getLocalQuestionForCategory(category, true, mode, askedRef.current);
-    if (!local) return null;
-    return {
-      ...local,
-      text: fillPlayerPlaceholder(local.text, currentPlayerName, otherPlayers),
-    };
+    return null;
   }
 
   async function switchToCard(
@@ -264,6 +298,12 @@ export default function OyunPage() {
       currentPlayerName,
       playerList,
     );
+    if (sert) {
+      seenKeysRef.current.push(dedupeKey(sert.text, playerList));
+      dealtRef.current.push(normalizeText(sert.text));
+    } else {
+      setError("Yeni soru üretilemedi, tekrar deneyin.");
+    }
     setRoundCards((prev) =>
       prev.map((c, i) =>
         i === index && c.revealed ? { ...c, question: sert } : c,
@@ -298,9 +338,8 @@ export default function OyunPage() {
   function advanceRound(samePlayer: boolean) {
     const picked = roundCards.find((c) => c.revealed && c.question);
     if (picked?.question) {
-      const norm = normalizeText(picked.question.text);
-      askedRef.current.push(norm);
-      dealtRef.current.push(norm);
+      seenKeysRef.current.push(dedupeKey(picked.question.text, players));
+      dealtRef.current.push(normalizeText(picked.question.text));
     }
     setQuestionCount((c) => c + 1);
     const nextIndex = samePlayer ? current : (current + 1) % players.length;
@@ -309,8 +348,8 @@ export default function OyunPage() {
   }
 
   function restart() {
-    askedRef.current = [];
     dealtRef.current = [];
+    seenKeysRef.current = [];
     setRoundCards([]);
     setError(null);
     setQuestionCount(0);
@@ -359,9 +398,9 @@ export default function OyunPage() {
                   Oyunu <span className="text-cola-500">Kur</span>
                 </motion.h1>
                 <p className="mt-3 text-sm font-medium text-cola-800/70">
-                  Her turda 8 kategoriden rastgele 5 kart dağıtılır; aralarında
-                  gizli bir sert kart var. Soruyu beğenmezsen başka karta
-                  basabilirsin ama yeni soru sert olur.
+                  Her turda {CATEGORIES.length} kategoriden rastgele 5 kart
+                  dağıtılır; aralarında gizli bir sert kart var. Soruyu
+                  beğenmezsen başka karta basabilirsin ama yeni soru sert olur.
                 </p>
               </div>
 
@@ -417,10 +456,60 @@ export default function OyunPage() {
                 </div>
               </section>
 
-              <section>
+              <section className="mb-12">
                 <h2 className="mb-4 flex items-center gap-3 font-display text-xs font-bold tracking-[0.25em] text-cola-500 uppercase">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cola-600 text-[11px] text-cream-100">
                     2
+                  </span>
+                  Zorluk Seviyesi
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {INTENSITIES.map((lv) => {
+                    const active = lv.id === level;
+                    return (
+                      <button
+                        key={lv.id}
+                        onClick={() => setLevel(lv.id)}
+                        aria-pressed={active}
+                        className={`relative flex flex-col gap-3 rounded-3xl border p-5 text-left transition-all duration-300 ${
+                          active
+                            ? "border-cola-500/60 bg-gradient-to-br from-cola-600/15 to-cola-800/20 shadow-pop"
+                            : "glass-cream border-cola-500/15 hover:border-cola-500/35"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-3xl">{lv.emoji}</span>
+                          <span className="rounded-full bg-cola-600/10 px-2.5 py-1 text-[10px] font-black tracking-wider text-cola-600 uppercase">
+                            Seviye {lv.level}/4
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-display text-sm font-bold text-cola-800 uppercase">
+                            {lv.name}
+                          </p>
+                          <p className="mt-1 text-xs text-cola-800/60">
+                            {lv.tagline}
+                          </p>
+                        </div>
+                        {active && (
+                          <span className="absolute -top-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full bg-cola-600 text-sm text-cream-100 shadow-pop">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-xs font-medium text-cola-800/60">
+                  Tüm sorular bu seviyede sorulur; gizli sert kart bir üst
+                  seviyede soru sorar.
+                </p>
+              </section>
+
+              <section>
+                <h2 className="mb-4 flex items-center gap-3 font-display text-xs font-bold tracking-[0.25em] text-cola-500 uppercase">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-cola-600 text-[11px] text-cream-100">
+                    3
                   </span>
                   Oyuncular
                 </h2>
@@ -538,6 +627,17 @@ export default function OyunPage() {
                   </span>
                   <span className="flex items-center gap-2 rounded-full border border-cola-500/20 bg-cream-100/80 py-2 pr-5 pl-2 shadow-soft backdrop-blur">
                     <span className="font-display flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cola-700 to-cola-900 text-base">
+                      {getIntensity(level).emoji}
+                    </span>
+                    <span className="text-sm font-bold text-cola-800">
+                      {getIntensity(level).name}
+                      <span className="ml-2 text-xs font-semibold tracking-wider text-cola-500 uppercase">
+                        Sert: {getIntensity(getSertIntensity(level)).name}
+                      </span>
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2 rounded-full border border-cola-500/20 bg-cream-100/80 py-2 pr-5 pl-2 shadow-soft backdrop-blur">
+                    <span className="font-display flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-cola-600 to-cola-900 text-base">
                       ⚡
                     </span>
                     <span className="text-sm font-bold text-cola-800">

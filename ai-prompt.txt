@@ -1,0 +1,50 @@
+========================================================
+Oyun: "Sınır Kartları" — bir doğruluk (truth) partisi oyunu.
+Görev: Yalnızca DOĞRULUK (truth) soruları üret. Soru olmayan hiçbir görev, eylem veya meydan okuma içeriği üretme.
+
+Bu bir standart mod. Sorular sınırları zorlasa da +18 ya da cinsel içerikli olmamalı; herkesin olduğu bir ortamda rahatça okunabilmeli. Hiçbir soruda KÜFÜR, ARGO veya HAKARET kullanma; dil temiz ve saygılı olsun.
+
+Zorluk seviyesi: Isı Yükseliyor — Sırlar yavaşça sızıyor. (seviye 2/4).
+- Normal kartlar TAM OLARAK bu seviyede soru üretir; daha kolay ya da daha zor olmasın.
+- SERT kart sorusu bir üst seviyede olsun: Kıvılcım (seviye 3/4).
+
+Aşağıda 5 kart ve her kartın gizli kategorisi var. HER KART İÇİN TAM OLARAK 1 soru üret, sıraya birebir uy (kart üzerinde kendi seviyesi işaretli):
+1. 🧠 Hayat [seviye: Isı Yükseliyor]
+2. ❤️ Aşk [seviye: Isı Yükseliyor]
+3. 🎭 Gizli [seviye: Isı Yükseliyor] — SERT SORU: bu kart, seçilen seviyenin bir üstünde olacak şekilde en cesur, en kişisel ve sınırları zorlayan soru olsun
+4. ✈️ Yolculuk [seviye: Isı Yükseliyor]
+5. 💸 Para [seviye: Isı Yükseliyor]
+
+Bu oyunda 3 oyuncu var ve sorular sırayla bir oyuncuya soruluyor. Diğer oyunculara gönderme yapan sorularda "@oyuncu" yaz. GERÇEK OYUNCU İSİMLERİNİ BİLMİYORSUN: asla gerçek isim yazma, yalnızca "@oyuncu" placeholder'ını kullan (oyun adı otomatik koyar).
+
+Kurallar:
+- 5 adet soru üret; sıra asla bozulmasın.
+- Dil: Düzgün, doğal ve akıcı Türkçe kullan. Bozuk cümle, yanlış ek, yapay/çeviri kokan ifade, İngilizce veya argo karışıklığı olmasın. Soru herkesin ilk okumada anlayacağı kadar net olsun.
+- Küfür, argo, hakaret ve müstehcen laf yasak; içerik ne kadar cesur olursa olsun kelimeler temiz ve saygılı kalmalı.
+- Her soru TEK cümle, "sen" hitabı, en fazla ~30 kelime, soru işaretiyle bitsin.
+- Sorular BİRBİRİNE BENZEMESİN: her soru farklı bir konu, farklı bir durum ve farklı bir tonda olsun; aynı temayı veya benzer senaryoyu iki kez kullanma.
+- Klişe sorulardan kaçın: "En büyük pişmanlığın ne?" gibi her doğruluk oyununda sorulan cümleleri üretme.
+- Soruların yaklaşık yarısı EĞLENCELİ, komik ve yaratıcı olsun; hepsi ciddi veya duygusal olmasın. Komik senaryolar, absürt durumlar, "olsaydı ne yapardın" soruları serbest.
+- En az 2 soruda diğer oyuncuyu KONU AL ve soruyu cevap veren oyuncuya ("sen") sor; hakkında akıl yürütülen kişi "@oyuncu" olur. Soru hep BU kalıplarda olsun: "Sence @oyuncu ... olsa ne yapardı?", "Sence @oyuncu ... olsa hangisini seçerdi?", "Sence @oyuncu en çok neyi özlerdi?", "Sence @oyuncu ... olsa hangisi olurdu?" — yani cevap veren, "@oyuncu" hakkında "o ... yapardı / seçerdi / olurdu" diye tahmin yürütür.
+- @oyuncu'dan hemen sonra ASLA VİRGÜL koyma: "@oyuncu, ..." biçimi her durumda YASAK (soru başında da, ortasında da). Hakkında konuşulan oyuncu ("@oyuncu") asla sorunun muhatabı (cevap veren oyuncu) olmamalı; cevap veren kendi hakkında değil, başka bir oyuncu hakkında yorum yapmalı.
+- @oyuncu'ya SORU YÖNELTME: "@oyuncu, ... yapar mısın?", "@oyuncu anlatsın", "@oyuncu'ya sor", "@oyuncu kendi cevabını versin" gibi muhatap formatları YASAK. @oyuncu'dan asla kendi cevabı istenmez.
+- "@oyuncu" metnini AYNEN koru, başka isim kullanma.
+- Kartın kategorisine uygun olsun: "Hayat" → gündelik hayat, "Gizli" → sırlar, "Geçmiş" → anılar/pişmanlıklar, "Aşk" → kalp işleri, "Hayal" → hayal senaryoları, "Duygu" → hisler, "Arkadaş" → gruptaki insanlar, "Cesaret" → sınırlar, "Aile" → aile sırları, "Para" → para/borç, "Gelecek" → yıllar sonrası, "Korku" → fobiler, "Utanç" → utanç verici anlar, "Güven" → güven/ihanet, "Tarz" → cazibe/stil, "Gece" → gece hayatı, "Yolculuk" → seyahat, "Dijital" → telefon/mesaj, "Yiyecek" → yemek alışkanlıkları, "Müzik" → şarkılar.
+- SERT işaretli kartın sorusu gerçekten zor, kışkırtıcı ve kişisel olsun; diğerleri kendi seviyelerinde daha rahat.
+
+Önceden sorulmuş sorulara AYNI veya ÇOK BENZER soru üretme:
+- En sevdiğin tatlı hangisi, birine tarif etmek zorunda kalsan ne söylersin?
+- Sence Ayşe bir milyon kazansa ilk iş olarak ne yapardı?
+- Gece yarısı canın çektiğinde yediğin en tuhaf şey ne?
+
+Çıktı YALNIZCA geçerli bir JSON dizisi, kart sırasıyla, başka hiçbir metin olmadan:
+[{"text": "soru metni"}, {"text": "soru metni"}]
+========================================================
+
+NOT: Yukarıdaki örnekte sarı renkli (değişken) kısımlar bir oyuna göre üretilmiştir.
+Gerçek çağrıda şunlar dinamik gelir:
+- Mod bloğu: "soft" veya "ekstrem" seçimine göre değişir (ekstremde +18 içerik serbest ama üslup kibar kalır).
+- Zorluk seviyesi: seçilen seviye (hafif/orta/atesli/sinir-otesi) ve sert kart bir üst seviye.
+- Kart listesi: turda masaya gelen 5 rastgele kategori; hangisinin sert olduğu gizli seçilir.
+- Oyuncu sayısı: turdaki oyuncu adedi (isimler gönderilmez, sadece sayı).
+- Önceden sorulmuş sorular: son 40 sorunun metni (tekrarı önlemek için).

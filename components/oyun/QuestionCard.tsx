@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { loadVoices, speak, stopSpeech } from "@/lib/tts";
 import type { TruthQuestion } from "@/lib/questions";
 
 type QuestionCardProps = {
@@ -18,6 +20,11 @@ export function QuestionCard({
   category,
   hard = false,
 }: QuestionCardProps) {
+  useEffect(() => {
+    loadVoices();
+    speak(question.text);
+    return stopSpeech;
+  }, [question.id, question.text]);
   return (
     <div className="perspective-1200 relative mx-auto w-full max-w-2xl">
       <div className="preserve-3d relative">
@@ -141,9 +148,12 @@ export function QuestionCard({
                       ? "✨ Kerbela Hüseyin üretimi"
                       : "Doğruluk sorusu · Gerçek cevap beklenir"}
                   </span>
-                  <span className="font-display text-xs font-bold tracking-widest text-cream-300 uppercase">
-                    {hard ? "⚡" : category?.emoji ?? "🎴"}
-                  </span>
+                  <button
+                    onClick={() => speak(question.text)}
+                    className="flex items-center gap-1.5 rounded-full border border-cream-100/25 bg-cream-100/10 px-3 py-1.5 text-[11px] font-black tracking-wider text-cream-100 uppercase transition hover:bg-cream-100/20"
+                  >
+                    🔊 Tekrar oku
+                  </button>
                 </div>
               </div>
             </motion.div>

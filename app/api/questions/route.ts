@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getIntensity, type IntensityId, type ModeId } from "@/lib/questions";
+import {
+  containsProfanity,
+  getIntensity,
+  type IntensityId,
+  type ModeId,
+  type TruthQuestion,
+} from "@/lib/questions";
 import {
   generateCategoryQuestions,
   generateTruthQuestions,
@@ -8,8 +14,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const VALID_LEVELS: IntensityId[] = ["hafif", "orta", "atesli", "sinir-otesi"];
+
+function sanitizeQuestions(questions: TruthQuestion[]): (TruthQuestion | null)[] {
+  return questions.map((q) => (containsProfanity(q.text) ? null : q));
+}
+
 type Body = {
   intensity?: IntensityId;
+  level?: IntensityId;
   mode?: ModeId;
   exclude?: string[];
   cards?: CategoryCardSpec[];
@@ -25,21 +38,25 @@ export async function POST(req: NextRequest) {
   }
 
   const mode: ModeId = body.mode === "ekstrem" ? "ekstrem" : "soft";
-  const exclude = (body.exclude ?? []).slice(0, 25);
+  const level: IntensityId = VALID_LEVELS.includes(body.level ?? "orta")
+    ? (body.level as IntensityId)
+    : "orta";
+  const exclude = (body.exclude ?? []).slice(0, 40);
 
-  if (!process.env.AI_API_KEY) {
+  if (!process.env.AI_API_KEY && !process.env.GROQ_API_KEY) {
     return NextResponse.json(
-      { error: "AI_API_KEY ayarlanmamış. OpenAI uyumlu bir sağlayıcı anahtarı ekleyin." },
+      { error: "AI_API_KEY veya GROQ_API_KEY ayarlanmamış. En az bir OpenAI uyumlu sağlayıcı anahtarı ekleyin." },
       { status: 501 },
     );
   }
 
   try {
-    const questions =
+    const rawQuestions =
       Array.isArray(body.cards) && body.cards.length > 0
         ? await generateCategoryQuestions(
             body.cards,
             mode,
+            level,
             exclude,
             body.players ?? [],
           )
@@ -48,6 +65,7 @@ export async function POST(req: NextRequest) {
             mode,
             exclude,
           );
+    const questions = sanitizeQuestions(rawQuestions);
     if (questions.length === 0) {
       return NextResponse.json(
         { error: "Üretici geçerli soru döndürmedi, tekrar deneyin." },

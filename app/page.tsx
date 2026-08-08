@@ -32,13 +32,24 @@ export default function Home() {
           id="nasil-oynanir"
           className="relative z-10 mx-auto max-w-6xl px-6 pt-8 pb-24"
         >
-          <div className="perspective-1200 preserve-3d mb-12 text-center">
+          <div className="perspective-1200 preserve-3d mb-10 text-center">
             <p className="font-display text-xs font-bold tracking-[0.3em] text-cola-500 uppercase">
               Nasıl oynanır
             </p>
             <h2 className="font-display mt-3 text-3xl font-black tracking-tight text-cola-800 uppercase sm:text-5xl">
               Kurallar <span className="text-cola-500">basit</span>
             </h2>
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+              {CATEGORIES.map((c) => (
+                <span
+                  key={c.id}
+                  className="flex items-center gap-1.5 rounded-full border border-cola-500/15 bg-cream-100/70 px-3 py-1.5 text-[10px] font-bold tracking-wider text-cola-600 uppercase backdrop-blur transition-colors hover:border-cola-500/35 hover:bg-cream-100"
+                >
+                  <span className="text-sm leading-none">{c.emoji}</span>
+                  {c.name}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-3">
@@ -79,7 +90,7 @@ export default function Home() {
                   "linear-gradient(135deg, rgb(40 9 15 / 0.9), rgb(89 24 36 / 0.85))",
               }}
             >
-              <div className="flex flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
+              <div className="flex flex-col items-center gap-8 text-center md:flex-row md:justify-between md:text-left">
                 <div>
                   <p className="font-display text-xs font-bold tracking-[0.3em] text-cola-300 uppercase">
                     {CATEGORIES.length} farklı kategori
@@ -92,6 +103,19 @@ export default function Home() {
                     gelir. Sert kartla ya da değişen soruyla karşılaşan
                     cesaretini göstermek zorunda.
                   </p>
+                </div>
+                <div className="grid shrink-0 grid-cols-4 gap-2 sm:gap-3">
+                  {CATEGORIES.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex flex-col items-center gap-1.5 rounded-2xl border border-cream-100/15 bg-cream-100/10 px-3 py-3 backdrop-blur-sm transition-colors hover:border-cream-100/30 hover:bg-cream-100/15"
+                    >
+                      <span className="text-xl sm:text-2xl">{c.emoji}</span>
+                      <span className="text-[9px] font-bold tracking-wider text-cream-100/80 uppercase">
+                        {c.name}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

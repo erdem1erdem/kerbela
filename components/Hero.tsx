@@ -136,7 +136,7 @@ export function Hero() {
         return (
           <motion.div
             key={i}
-            className="absolute hidden md:block"
+            className="absolute hidden scale-75 opacity-80 sm:block sm:scale-100 sm:opacity-100"
             style={{
               left: `${50 + chip.x}%`,
               top: `${50 + chip.y}%`,
