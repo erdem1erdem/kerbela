@@ -7,8 +7,6 @@
 } from "@/lib/questions";
 
 // AI sağlayıcıları aşağıdaki providerConfigs() bölümünden yönetilir.
-const DEFAULT_BASE_URL = "https://api.openai.com/v1";
-const DEFAULT_MODEL = "gpt-4o-mini";
 const GENERATION_COUNT = 8;
 
 /**
@@ -323,7 +321,8 @@ SERT kart bir seviye zor olur (hafif→orta, orta→ateşli, ateşli→sınır-�
 KATEGORİ: Soru kartının kategorisiyle ilgili olsun. Kategoriler: Hayat, Aşk, Gizli, Geçmiş, Hayal, Duygu, Arkadaş, Cesaret, Aile, Para, Gelecek, Korku, Utanç, Güven, Tarz, Gece, Dijital, Yiyecek, Müzik.
 
 @oyuncu:
-- En az 2 soru başka oyuncu hakkında; cevap veren "sen", konuşulan "@oyuncu".
+- 5 sorunun yaklaşık YARISI (2-3 soru) doğrudan cevap verenin kendisiyle ilgili olsun ("sen" hitabı, @oyuncu YOK): ör. "En büyük pişmanlığın neydi?", "Şu an aklında ne var?".
+- Kalan 2-3 soru başka oyuncu hakkında olsun; cevap veren "sen", konuşulan "@oyuncu".
 - Kalıp: "Sence @oyuncu ... olsa ne yapardı?", "Sence @oyuncu hangisini seçerdi?".
 - YASAK: "@oyuncu'ya sor", "@oyuncu anlatsın", "@oyuncu ne düşünüyorsun", "@oyuncu, ... yapar mısın?". @oyuncu'dan sonra virgül koyma; @Oyuncu, @player, gerçek isim kullanma.
 
