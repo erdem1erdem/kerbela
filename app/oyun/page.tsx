@@ -377,7 +377,7 @@ export default function OyunPage() {
             Geri
           </Link>
           <span className="glass-cream rounded-full border border-cola-500/15 px-4 py-2 font-display text-[11px] font-bold tracking-[0.2em] text-cola-600 uppercase">
-            Sınır Kartları
+            Kerbela Çölü
           </span>
         </header>
 
