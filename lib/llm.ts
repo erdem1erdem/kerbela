@@ -336,6 +336,7 @@ DİL & ÇEŞİTLİLİK:
 - Yaklaşık yarısı eğlenceli/komik/yaratıcı olsun.
 - Başlangıçları çeşitlendir ("Sence...", "Hiç...", "Eğer..." ile başlatma).
 - Tek ana soru; zincirleme soru yasak.
+- YAZIM/DİL BİLGİSİ HATASIZ: İyelik ekleri doğru olsun ("en büyük korkun ne?" — "korkunun ne?" YANLIŞ); "ki" ve "de/da" doğru yazılsın; ekler ve tamlamalar uyumlu olsun; çeviri/uygulama üslubu kullanma. Üretilen her soruyu yazım ve dil bilgisi açısından gözden geçir.
 
 ÖNCELİK: 1. Güvenlik 2. Sadece soru 3. Tam 5 soru 4. Kart sırası 5. Tekrar engeli 6. Kategori 7. Seviye 8. @oyuncu 9. Çeşitlilik 10. Yaratıcılık.
 
@@ -414,7 +415,7 @@ ${
 }
 Kurallar:
 - ${count} adet soru üret.
-- Dil: Düzgün, doğal ve akıcı Türkçe kullan. Bozuk cümle, yanlış ek, yapay/çeviri kokan ifade, İngilizce veya argo karışıklığı olmasın. Soru herkesin ilk okumada anlayacağı kadar net olsun.
+- Dil: Düzgün, doğal ve akıcı Türkçe kullan. Bozuk cümle, yanlış ek, yapay/çeviri kokan ifade, İngilizce veya argo karışıklığı olmasın. Soru herkesin ilk okumada anlayacağı kadar net olsun. YAZIM VE DİL BİLGİSİ HATASIZ ol (iyelik ekleri doğru: "en büyük korkun ne?", "korkunun ne?" YANLIŞ; "ki" ve "de/da" doğru yazılsın).
 - Küfür, argo, hakaret ve müstehcen laf yasak; içerik ne kadar cesur olursa olsun kelimeler temiz ve saygılı kalmalı.
 - Her soru TEK cümle, "sen" hitabı, en fazla ~30 kelime, soru işaretiyle bitsin.
 - Sorular birbirinden ve klişelerden farklı olsun; geniş bir konu yelpazesine yayılsın.
