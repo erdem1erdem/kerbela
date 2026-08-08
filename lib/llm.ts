@@ -9,13 +9,6 @@
 // AI sağlayıcıları aşağıdaki providerConfigs() bölümünden yönetilir.
 const GENERATION_COUNT = 8;
 
-/**
- * Ücretsiz/uygun maliyetli sağlayıcı fallback sistemi:
- * OpenRouter -> Groq -> Gemini -> Cerebras
- *
- * Sağlayıcıların yalnızca API anahtarı bulunanları aktif olur.
- */
-
 type GeneratedItem = { text?: unknown; tag?: unknown };
 
 function extractJsonArray(text: string): unknown[] {
@@ -48,18 +41,12 @@ function buildExcludeBlock(exclude: string[]): string {
     : "";
 }
 
-const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+const DEFAULT_GEMINI_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/openai";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 const DEFAULT_GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
-
-const DEFAULT_GEMINI_BASE_URL =
-  "https://generativelanguage.googleapis.com/v1beta/openai";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
-
-const DEFAULT_CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1";
-const DEFAULT_CEREBRAS_MODEL = "llama-3.3-70b";
 
 type ProviderConfig = {
   label: string;
@@ -68,6 +55,38 @@ type ProviderConfig = {
   model: string;
 };
 
+class ProviderError extends Error {
+  status: number;
+  label: string;
+
+  constructor(label: string, status: number, message: string) {
+    super(message);
+    this.name = "ProviderError";
+    this.label = label;
+    this.status = status;
+  }
+}
+
+const disabledProviders = new Set<string>();
+let lastUsedProvider: string | null = null;
+
+export function getLastUsedProvider(): string | null {
+  return lastUsedProvider;
+}
+
+function providerKey(config: ProviderConfig): string {
+  return `${config.label}|${config.model}`;
+}
+
+function disableProvider(config: ProviderConfig, reason: string) {
+  const key = providerKey(config);
+  if (disabledProviders.has(key)) return;
+  disabledProviders.add(key);
+  console.warn(
+    `[AI] ${config.label} (${config.model}) devre dışı bırakıldı: ${reason}`,
+  );
+}
+
 function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, "");
 }
@@ -75,34 +94,15 @@ function normalizeBaseUrl(value: string): string {
 /**
  * Sağlayıcı sırası:
  *
- * 1. OpenRouter
+ * 1. Gemini
  * 2. Groq
- * 3. Gemini
- * 4. Cerebras
  *
- * Bir sağlayıcı hata verirse, boş cevap döndürürse veya rate-limit'e
- * takılırsa sonraki sağlayıcı otomatik denenir.
- *
- * İstersen yalnızca istediğin sağlayıcıların API anahtarını .env'e koyabilirsin.
+ * Bir sağlayıcı hata verirse veya boş cevap döndürürse sonraki sağlayıcı
+ * otomatik denenir. Sunucu hatası (5xx) veren sağlayıcı sunucu yeniden
+ * başlatılana kadar devre dışı bırakılır.
  */
 function providerConfigs(): ProviderConfig[] {
   const providers: ProviderConfig[] = [
-    {
-      label: "OpenRouter",
-      baseUrl: normalizeBaseUrl(
-        process.env.OPENROUTER_BASE_URL ?? DEFAULT_OPENROUTER_BASE_URL,
-      ),
-      apiKey: process.env.OPENROUTER_API_KEY ?? "",
-      model: process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL,
-    },
-    {
-      label: "Groq",
-      baseUrl: normalizeBaseUrl(
-        process.env.GROQ_BASE_URL ?? DEFAULT_GROQ_BASE_URL,
-      ),
-      apiKey: process.env.GROQ_API_KEY ?? "",
-      model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
-    },
     {
       label: "Gemini",
       baseUrl: normalizeBaseUrl(
@@ -112,19 +112,20 @@ function providerConfigs(): ProviderConfig[] {
       model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
     },
     {
-      label: "Cerebras",
+      label: "Groq",
       baseUrl: normalizeBaseUrl(
-        process.env.CEREBRAS_BASE_URL ?? DEFAULT_CEREBRAS_BASE_URL,
+        process.env.GROQ_BASE_URL ?? DEFAULT_GROQ_BASE_URL,
       ),
-      apiKey: process.env.CEREBRAS_API_KEY ?? "",
-      model: process.env.CEREBRAS_MODEL ?? DEFAULT_CEREBRAS_MODEL,
+      apiKey: process.env.GROQ_API_KEY ?? "",
+      model: process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL,
     },
   ];
 
   return providers.filter(
     (provider) =>
       provider.apiKey.trim() !== "" &&
-      provider.model.trim() !== "",
+      provider.model.trim() !== "" &&
+      !disabledProviders.has(providerKey(provider)),
   );
 }
 
@@ -137,7 +138,7 @@ async function fetchCompletion(
 
   const timeout = setTimeout(() => {
     controller.abort();
-  }, 45000);
+  }, 35000);
 
   let res: Response;
 
@@ -149,14 +150,6 @@ async function fetchCompletion(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${config.apiKey}`,
-        ...(config.label === "OpenRouter"
-          ? {
-              "HTTP-Referer":
-                process.env.OPENROUTER_SITE_URL ?? "http://localhost:3000",
-              "X-Title":
-                process.env.OPENROUTER_APP_NAME ?? "Sinir Kartlari",
-            }
-          : {}),
       },
       body: JSON.stringify({
         model: config.model,
@@ -181,7 +174,9 @@ async function fetchCompletion(
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
 
-    throw new Error(
+    throw new ProviderError(
+      config.label,
+      res.status,
       `${config.label} üretim hatası (${res.status}): ${detail.slice(0, 500)}`,
     );
   }
@@ -212,8 +207,7 @@ async function callLlm(
   if (configs.length === 0) {
     throw new Error(
       "Hiçbir AI sağlayıcısı yapılandırılmamış. " +
-        "OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY veya CEREBRAS_API_KEY " +
-        "değişkenlerinden en az birini .env'e ekleyin.",
+        "GEMINI_API_KEY veya GROQ_API_KEY değişkenini .env'e ekleyin.",
     );
   }
 
@@ -221,28 +215,28 @@ async function callLlm(
 
   for (const config of configs) {
     try {
-      const content = await fetchCompletion(
-        config,
-        system,
-        prompt,
-      );
+      const content = await fetchCompletion(config, system, prompt);
 
       if (content.trim()) {
-        console.info(
-          `[AI] ${config.label} kullanıldı (${config.model})`,
-        );
-
+        lastUsedProvider = config.label;
+        console.info(`[AI] ${config.label} kullanıldı (${config.model})`);
         return content;
       }
 
-      lastError = new Error(
-        `${config.label} boş içerik döndürdü.`,
-      );
+      lastError = new Error(`${config.label} boş içerik döndürdü.`);
     } catch (err) {
       lastError =
         err instanceof Error
           ? err
           : new Error(`${config.label} bilinmeyen üretim hatası`);
+
+      if (
+        err instanceof ProviderError &&
+        err.status >= 500 &&
+        err.status < 600
+      ) {
+        disableProvider(config, lastError.message);
+      }
 
       console.warn(
         `[AI] ${config.label} başarısız, sonraki sağlayıcı deneniyor:`,
@@ -304,8 +298,18 @@ GİRDİLER: Aşağıda; MOD, ZORLUK, KARTLAR ve ÖNCEKİ_SORULAR değerleri veri
 
 ÇIKTI:
 - Tam 5 soru üret, kart sırasına birebir uy.
-- Sadece sorunun metnini yaz; kategori, emoji, seviye, sıra numarası gibi kart bilgisini asla ekleme.
-- Her soru: tek cümle, "sen" hitabı, "?" ile biten, 8-20 kelime, doğal akıcı Türkçe.
+- Sadece sorunun metnini yaz; kategori, emoji, seviye, sıra numarası gibi kart bilgisini asla ekleme. Kategori adı soruya asla sızmasın.
+- Her soru: KISA ve NET tek cümle, "sen" hitabı, "?" ile biten, 8-16 kelime.
+- Doğal, akıcı, sade günlük Türkçe; yapay, resmi, dolambaçlı veya zincirleme cümle yasak. Soru ilk okumada anlaşılsın ve net bir cevabı olsun.
+- Örnek iyi soru: "En yakın arkadaşın senin hakkında hiç söylemediğin bir şeyi biliyor olabilir mi?" — sade, mantıklı ve doğal.
+
+ÖRNEK SORULAR (aşağıdaki stili birebir taklit et, metnini kopyalama):
+- "İlk kez âşık olduğunu nasıl anladın?"
+- "Kimseye söylemediğin bir sırrın var mı?"
+- "Pişman olduğun bir kararın var mı?"
+- "Cesaretini son ne zaman kanıtladın?"
+- "İmkânın olsa bugün ne yapardın?"
+Bu örnekler gibi KISA, sade, tek cümle ve doğal Türkçe sorular üret; onları birebir kopyalama, kendi sorularını bu üslupta yaz.
 
 MOD:
 soft: kişisel/utandırıcı/cesur olabilir ama herkesin yanında okunur; cinsel/erotik içerik yasak.
@@ -324,6 +328,7 @@ KATEGORİ: Soru kartının kategorisiyle ilgili olsun. Kategoriler: Hayat, Aşk,
 - 5 sorunun yaklaşık YARISI (2-3 soru) doğrudan cevap verenin kendisiyle ilgili olsun ("sen" hitabı, @oyuncu YOK): ör. "En büyük pişmanlığın neydi?", "Şu an aklında ne var?".
 - Kalan 2-3 soru başka oyuncu hakkında olsun; cevap veren "sen", konuşulan "@oyuncu".
 - Kalıp: "Sence @oyuncu ... olsa ne yapardı?", "Sence @oyuncu hangisini seçerdi?".
+- @oyuncu'lu sorular da kısa ve sade kalsın: ör. "Sence @oyuncu yalan söyleyebilir mi?" gibi tek cümle.
 - YASAK: "@oyuncu'ya sor", "@oyuncu anlatsın", "@oyuncu ne düşünüyorsun", "@oyuncu, ... yapar mısın?". @oyuncu'dan sonra virgül koyma; @Oyuncu, @player, gerçek isim kullanma.
 
 TEKRAR YASAĞI (EN ÖNCELİKLİ):
@@ -336,6 +341,7 @@ DİL & ÇEŞİTLİLİK:
 - Yaklaşık yarısı eğlenceli/komik/yaratıcı olsun.
 - Başlangıçları çeşitlendir ("Sence...", "Hiç...", "Eğer..." ile başlatma).
 - Tek ana soru; zincirleme soru yasak.
+- Cümle kısa, sade ve öz olsun; gereksiz kelime, tekrar, karmaşık ekleme ve devrik-anlaşılmaz yapılar yasak.
 - YAZIM/DİL BİLGİSİ HATASIZ: İyelik ekleri doğru olsun ("en büyük korkun ne?" — "korkunun ne?" YANLIŞ); "ki" ve "de/da" doğru yazılsın; ekler ve tamlamalar uyumlu olsun; çeviri/uygulama üslubu kullanma. Üretilen her soruyu yazım ve dil bilgisi açısından gözden geçir.
 
 ÖNCELİK: 1. Güvenlik 2. Sadece soru 3. Tam 5 soru 4. Kart sırası 5. Tekrar engeli 6. Kategori 7. Seviye 8. @oyuncu 9. Çeşitlilik 10. Yaratıcılık.
@@ -347,6 +353,10 @@ OYUNCU_SAYISI: ${players.length}
 
 KARTLAR:
 ${cardBlock}
+
+EŞLEŞME KURALI: Her soru yalnızca kendi kartının temasıyla ilgili olsun: ${cards
+  .map((c, i) => `${i + 1}. soru ${c.name}`)
+  .join(", ")}. Soruyu kart kategorisinden uzaklaştırma; kartın adı soruya yazılmaz, sadece konu o kategoriden olur.
 
 ÖNCEKİ_SORULAR:
 ${previousBlock}
@@ -361,22 +371,24 @@ SON TALİMAT: Yalnızca tam 5 doğruluk sorusunu kart sırasıyla, başka hiçbi
   const lines = content
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    .filter((l) => l.length > 0)
+    .map((l) =>
+      l
+        .replace(/^\d+[.)]\s*/, "")
+        .replace(/^[-–•*]\s*/, "")
+        .replace(/^[\s\S]*?\bseviye:\s*[^,"'«»“”\n]*\s*,?\s*/i, "")
+        .replace(/^[^\p{L}\p{N}]+\s*/u, "")
+        .replace(/^["'«»“”]+|["'«»“”]+$/g, "")
+        .trim(),
+    )
+    .filter(
+      (l) => l.endsWith("?") && !l.includes("@oyuncu,") && l.length <= 220,
+    );
 
   const questions: TruthQuestion[] = [];
   for (let i = 0; i < cards.length; i++) {
-    const raw = lines[i] ?? "";
-    const text = raw
-      .replace(/^\d+[.)]\s*/, "")
-      .replace(/^[-–•*]\s*/, "")
-      .replace(/^[\s\S]*?\bseviye:\s*[^,"'«»“”\n]*\s*,?\s*/i, "")
-      .replace(/^[^\p{L}\p{N}]+\s*/u, "")
-      .replace(/^["'«»“”]+|["'«»“”]+$/g, "")
-      .trim();
-    if (!text || !text.endsWith("?")) continue;
-    if (text.includes("@oyuncu,")) continue;
-    if (text.length > 220) continue;
-
+    const text = lines[i] ?? "";
+    if (!text) continue;
     const card = cards[i];
     questions.push({
       id: `ai-${Date.now()}-${i}`,

@@ -9,6 +9,7 @@ import {
 import {
   generateCategoryQuestions,
   generateTruthQuestions,
+  getLastUsedProvider,
   type CategoryCardSpec,
 } from "@/lib/llm";
 
@@ -43,14 +44,9 @@ export async function POST(req: NextRequest) {
     : "orta";
   const exclude = (body.exclude ?? []).slice(0, 40);
 
-  if (
-    !process.env.OPENROUTER_API_KEY &&
-    !process.env.GROQ_API_KEY &&
-    !process.env.GEMINI_API_KEY &&
-    !process.env.CEREBRAS_API_KEY
-  ) {
+  if (!process.env.GROQ_API_KEY && !process.env.GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: "Hiçbir AI sağlayıcısı yapılandırılmamış. OPENROUTER_API_KEY, GROQ_API_KEY, GEMINI_API_KEY veya CEREBRAS_API_KEY'ten en az birini .env'e ekleyin." },
+      { error: "Hiçbir AI sağlayıcısı yapılandırılmamış. GEMINI_API_KEY veya GROQ_API_KEY değişkenini .env'e ekleyin." },
       { status: 501 },
     );
   }
@@ -77,7 +73,7 @@ export async function POST(req: NextRequest) {
         { status: 502 },
       );
     }
-    return NextResponse.json({ questions });
+    return NextResponse.json({ questions, provider: getLastUsedProvider() });
   } catch (err) {
     console.error("Soru üretimi başarısız:", err);
     return NextResponse.json(

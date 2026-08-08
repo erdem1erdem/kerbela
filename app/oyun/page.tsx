@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { SpatialBackground } from "@/components/SpatialBackground";
 import { QuestionCard } from "@/components/oyun/QuestionCard";
+import { QuestionLoader } from "@/components/oyun/QuestionLoader";
 import { CardFlip, type RoundCard } from "@/components/oyun/CardFlip";
 import { loadVoices, speak } from "@/lib/tts";
 import {
@@ -168,6 +169,7 @@ export default function OyunPage() {
   async function dealRound(currentPlayerName: string, playerList: string[]) {
     setLoadingRound(true);
     setError(null);
+    setRoundCards([]);
     const roundId = nextRoundId();
     const hardIdx = pickHardIndex();
     const cards: RoundCard[] = shuffle(CATEGORIES)
@@ -674,7 +676,9 @@ export default function OyunPage() {
                 </div>
               </div>
 
-              {pickedCard ? (
+              {loadingRound ? (
+                <QuestionLoader playerName={players[current] ?? "Oyuncu"} />
+              ) : pickedCard ? (
                 <QuestionCard
                   question={pickedCard.question!}
                   index={questionCount}
@@ -696,36 +700,7 @@ export default function OyunPage() {
                     Tekrar dene
                   </button>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center gap-5 py-16">
-                  <div className="relative h-16 w-16">
-                    <motion.span
-                      className="absolute inset-0 rounded-full border-2 border-cola-500/20"
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 1.2,
-                        ease: "linear",
-                      }}
-                    />
-                    <motion.span
-                      className="absolute inset-2 rounded-full border-2 border-cola-600 border-t-transparent"
-                      animate={{ rotate: -360 }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.8,
-                        ease: "linear",
-                      }}
-                    />
-                    <span className="absolute inset-0 flex items-center justify-center text-2xl">
-                      ✨
-                    </span>
-                  </div>
-                  <p className="font-display text-sm font-bold tracking-[0.2em] text-cola-700 uppercase">
-                    Kerbela Hüseyin yeni sorular üretiyor…
-                  </p>
-                </div>
-              )}
+              ) : null}
 
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <button
